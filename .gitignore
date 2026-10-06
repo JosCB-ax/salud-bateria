@@ -1,0 +1,6 @@
+__pycache__/
+build/
+dist/
+instalador/
+*.spec
+salud-bateria.zip

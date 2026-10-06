@@ -1,0 +1,59 @@
+# Construye el instalador de Windows en cada cambio y lo publica en "Releases".
+name: Instalador de Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construir:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: python -m pip install pyinstaller psutil
+
+      - name: Pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Leer la versión
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path instalador.iss -Pattern '#define Version "(.+)"').Matches[0].Groups[1].Value
+          "numero=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Crear SaludBateria.exe
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --name SaludBateria
+          --icon icono.ico --add-data "icono.ico;." --version-file version.txt app.py
+
+      - name: Crear el instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc /Qp instalador.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SaludBateria-Setup-${{ steps.version.outputs.numero }}
+          path: instalador/*.exe
+
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.numero }}
+          name: Salud de la batería ${{ steps.version.outputs.numero }}
+          files: instalador/*.exe
+          make_latest: true
