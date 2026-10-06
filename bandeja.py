@@ -85,6 +85,8 @@ def main() -> None:
         return  # ya hay un icono funcionando
 
     idioma.fijar(configuracion.cargar().get("idioma", "es"))
+    if platform.system() == "Linux" and getattr(sys, "frozen", False):
+        os.environ.setdefault("PYSTRAY_BACKEND", "xorg")  # el ejecutable no lleva GTK dentro
     import psutil
     import pystray
     from PIL import Image

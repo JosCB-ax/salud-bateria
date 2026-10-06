@@ -1,5 +1,5 @@
-# Construye el instalador de Windows en cada cambio y lo publica en "Releases".
-name: Instalador de Windows
+# Construye los instaladores (Windows, macOS y Linux) en cada cambio y los publica en "Releases".
+name: Instaladores
 
 on:
   push:
@@ -48,13 +48,75 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SaludBateria-Setup-${{ steps.version.outputs.numero }}
+          name: windows
           path: instalador/*.exe
 
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: python -m pip install pyinstaller -r requirements.txt
+      - name: Pruebas
+        run: python -m unittest discover -s tests
+      - name: Crear SaludBateria.app y el .dmg
+        run: |
+          v=$(sed -n 's/#define Version "\(.*\)"/\1/p' instalador.iss)
+          python -m PyInstaller --noconfirm --clean --windowed --name SaludBateria \
+            --icon icono.ico --add-data "icono.ico:." --hidden-import pystray._darwin \
+            --osx-bundle-identifier com.saludbateria.app app.py
+          mkdir dmg && cp -R dist/SaludBateria.app dmg/ && ln -s /Applications dmg/Aplicaciones
+          hdiutil create -volname "Salud de la bateria" -srcfolder dmg -format UDZO \
+            "SaludBateria-$v-macOS.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: "*.dmg"
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: python -m pip install pyinstaller -r requirements.txt
+      - name: Pruebas
+        run: python -m unittest discover -s tests
+      - name: Crear el ejecutable y el paquete
+        run: |
+          v=$(sed -n 's/#define Version "\(.*\)"/\1/p' instalador.iss)
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SaludBateria \
+            --add-data "icono.ico:." --hidden-import pystray._xorg --exclude-module gi app.py
+          d="SaludBateria-$v-Linux"
+          mkdir "$d"
+          cp dist/SaludBateria empaquetado/instalar-linux.sh empaquetado/desinstalar-linux.sh "$d/"
+          python -c "from PIL import Image; Image.open('icono.ico').save('$d/icono.png')"
+          tar czf "$d.tar.gz" "$d"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: "*.tar.gz"
+
+  publicar:
+    needs: [construir, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "numero=$(sed -n 's/#define Version "\(.*\)"/\1/p' instalador.iss)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquetes
+          merge-multiple: true
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.numero }}
           name: Salud de la batería ${{ steps.version.outputs.numero }}
-          files: instalador/*.exe
+          files: paquetes/*
           make_latest: true

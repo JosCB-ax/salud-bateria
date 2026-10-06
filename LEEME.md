@@ -42,6 +42,16 @@ formas**.
 Para sacar una versión nueva, cambia el número en `instalador.iss`,
 `version.txt` y `app.py`, y vuelve a ejecutar el `.bat`.
 
+## macOS y Linux
+
+En [Releases](https://github.com/JosCB-ax/salud-bateria/releases/latest) también están:
+
+- **macOS** (`SaludBateria-<versión>-macOS.dmg`, Macs con chip Apple): abre el .dmg y arrastra
+  SaludBateria a Aplicaciones. La primera vez macOS dirá que no puede verificar al desarrollador
+  (el programa no está firmado): ve a Ajustes del Sistema › Privacidad y seguridad › «Abrir igualmente».
+- **Linux** (`SaludBateria-<versión>-Linux.tar.gz`): descomprímelo y ejecuta `./instalar-linux.sh`.
+  Aparece en el menú de aplicaciones; `./desinstalar-linux.sh` lo quita.
+
 ## Usarlo desde Python (para desarrollo)
 
 Necesitas Python 3.10 o posterior:
