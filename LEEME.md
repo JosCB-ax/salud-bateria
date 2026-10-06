@@ -42,6 +42,12 @@ formas**.
 Para sacar una versión nueva, cambia el número en `instalador.iss`,
 `version.txt` y `app.py`, y vuelve a ejecutar el `.bat`.
 
+## Manual
+
+El manual de usuario en PDF (instalación en Windows, macOS y Linux y explicación de cada función, con
+índice que se puede pulsar) está en cada versión de [Releases](https://github.com/JosCB-ax/salud-bateria/releases/latest)
+y dentro del programa, en la pestaña «Manual».
+
 ## macOS y Linux
 
 En [Releases](https://github.com/JosCB-ax/salud-bateria/releases/latest) también están:

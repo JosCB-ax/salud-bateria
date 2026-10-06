@@ -120,6 +120,13 @@ jobs:
         with:
           path: paquetes
           merge-multiple: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Manual en PDF
+        run: |
+          python -m pip install reportlab
+          python manual.py "paquetes/Manual-Salud-de-la-bateria-${{ steps.version.outputs.numero }}.pdf" "${{ steps.version.outputs.numero }}"
       - name: Huellas SHA-256 (el programa las comprueba antes de instalar una actualización)
         run: cd paquetes && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Publicar en Releases

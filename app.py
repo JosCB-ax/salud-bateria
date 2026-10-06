@@ -23,6 +23,7 @@ import ahorro  # noqa: E402
 import configuracion  # noqa: E402
 import historial  # noqa: E402
 import legal  # noqa: E402
+import manual  # noqa: E402
 import prediccion  # noqa: E402
 from configuracion import recurso  # noqa: E402
 import tema  # noqa: E402
@@ -32,7 +33,7 @@ from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 
@@ -208,6 +209,38 @@ class App(tk.Tk):
         sb.pack(side="right", fill="y")
         self.txt_consejos.pack(fill="both", expand=True)
         self.nb.add(f, text="Consejos")
+
+        # Manual
+        f = ttk.Frame(self.nb, padding=8)
+        fila = ttk.Frame(f)
+        fila.pack(fill="x", pady=(0, 8))
+        ttk.Button(fila, text="Abrir el manual en PDF", command=self.abrir_manual).pack(side="left")
+        ttk.Label(fila, text="Pulsa un apartado del índice para ir a él.",
+                  foreground=self.p["mut"]).pack(side="left", padx=10)
+        caja = tk.Text(f, wrap="word", relief="flat", font=("Segoe UI", 10), padx=10, pady=8,
+                       cursor="arrow", bg=self.p["panel"], fg=self.p["fg"], highlightthickness=0)
+        sb = ttk.Scrollbar(f, command=caja.yview)
+        caja.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        caja.pack(fill="both", expand=True)
+        caja.tag_configure("titulo", font=("Segoe UI", 13, "bold"), foreground=self.p["acc"], spacing1=14, spacing3=6)
+        caja.tag_configure("indice", foreground=self.p["acc"], underline=True, spacing1=2)
+        secciones = manual.texto_plano()
+        caja.insert("end", "Índice\n", "titulo")
+        for clave, titulo, _ in secciones:
+            caja.insert("end", titulo + "\n", ("indice", "ir_" + clave))
+            caja.tag_bind("ir_" + clave, "<Button-1>", lambda _e, c=clave: caja.yview(c))
+            caja.tag_bind("ir_" + clave, "<Enter>", lambda _e: caja.config(cursor="hand2"))
+            caja.tag_bind("ir_" + clave, "<Leave>", lambda _e: caja.config(cursor="arrow"))
+        for clave, titulo, cuerpo in secciones:
+            caja.insert("end", "\n")
+            caja.mark_set(clave, "end-1c")
+            caja.mark_gravity(clave, "left")
+            caja.insert("end", titulo + "\n", "titulo")
+            caja.insert("end", cuerpo + "\n")
+        caja.insert("end", "\n" + legal.pie())
+        caja.config(state="disabled")
+        self.nb.add(f, text="Manual")
 
     def _barra(self):
         ttk.Label(self, text=legal.pie(), foreground=self.p["mut"],
@@ -524,6 +557,12 @@ class App(tk.Tk):
         botones.grid(row=14, column=0, columnspan=3, sticky="e", pady=(16, 0))
         ttk.Button(botones, text="Cancelar", command=v.destroy).pack(side="right")
         ttk.Button(botones, text="Guardar", command=aceptar).pack(side="right", padx=8)
+
+    def abrir_manual(self):
+        try:
+            manual.abrir_archivo(manual.ruta_local(VERSION))
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Manual", f"No se pudo abrir el manual en PDF:\n{e}")
 
     def ventana_legal(self, clave: str, padre=None):
         titulo, cuerpo = legal.texto(clave)
