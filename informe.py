@@ -6,6 +6,7 @@ import datetime as dt
 import html
 import platform
 
+from idioma import t as tr
 from autonomia import calcular, horas_texto, sin_datos_texto
 
 COLORES = {"excelente": "#1a9e5c", "buena": "#4caf50", "desgastada": "#e6a100",
@@ -19,6 +20,10 @@ def _fmt(v, unidad="", dec=0):
 
 
 def _filas(b) -> list[tuple[str, str]]:
+    return [(tr(k), tr(v)) for k, v in _filas_es(b)]
+
+
+def _filas_es(b) -> list[tuple[str, str]]:
     return [
         ("Salud", _fmt(b.salud, "%", 1)),
         ("Desgaste", _fmt(b.desgaste, "%", 1)),
@@ -41,13 +46,13 @@ def _filas(b) -> list[tuple[str, str]]:
 def _autonomia_lineas(b) -> list[str]:
     escenarios = calcular(b)
     if not escenarios:
-        return [sin_datos_texto(b)]
+        return [tr(sin_datos_texto(b))]
     lineas = []
     for e in escenarios:
         l = f"{e.titulo} ({e.vatios:.1f} W): carga completa hoy {horas_texto(e.horas_hoy)}"
         if e.horas_nueva:
             l += f", cuando era nueva {horas_texto(e.horas_nueva)}"
-        lineas.append(l + ".")
+        lineas.append(tr(l + "."))
     return lineas
 
 
@@ -107,11 +112,11 @@ def html_informe(r: dict) -> str:
         bloques.append(f"""
 <section class="card">
   <div class="gauge" style="--p:{salud or 0};--c:{color}">
-    <div><strong>{_fmt(salud, '%', 0) if salud is not None else '?'}</strong><span>salud</span></div>
+    <div><strong>{_fmt(salud, '%', 0) if salud is not None else '?'}</strong><span>{e(tr('salud'))}</span></div>
   </div>
   <div class="resumen">
-    <h2>{e(b.nombre)} <span class="tag" style="background:{color}">{e(nivel)}</span></h2>
-    <p>{e(diag)}</p>
+    <h2>{e(b.nombre)} <span class="tag" style="background:{color}">{e(tr(nivel))}</span></h2>
+    <p>{e(tr(diag))}</p>
     <table>{filas}</table>{notas}
   </div>
 </section>""")
@@ -131,16 +136,16 @@ def html_informe(r: dict) -> str:
     autonomia = ""
     if r["baterias"]:
         b0 = r["baterias"][0]
-        autonomia = ('<div class="card"><h2>Autonomía real con la configuración de este equipo</h2>'
+        autonomia = (f'<div class="card"><h2>{e(tr("Autonomía real con la configuración de este equipo"))}</h2>'
                      + "".join(f"<p>{e(x)}</p>" for x in _autonomia_lineas(b0))
-                     + (f"<h2>Evolución de la salud</h2>{_svg_historial(b0.historial)}" if len(b0.historial) > 1 else "")
+                     + (f"<h2>{e(tr('Evolución de la salud'))}</h2>{_svg_historial(b0.historial)}" if len(b0.historial) > 1 else "")
                      + "</div>")
-    consejos = "".join(f"<li>{e(c)}</li>" for c in r["consejos"])
+    consejos = "".join(f"<li>{e(tr(c))}</li>" for c in r["consejos"])
 
     return f"""<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Salud de la batería</title>
+<title>{e(tr('Salud de la batería'))}</title>
 <style>
 :root{{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#667;--line:#e4e6ea;--acc:#2f6fed}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#14161b;--card:#1d2027;--fg:#e8eaf0;--mut:#99a;--line:#2c3039;--acc:#6d9bff}}}}
@@ -163,16 +168,16 @@ th{{color:var(--mut);font-weight:500}}
 ol li{{margin-bottom:8px}} .nota{{color:var(--mut);font-size:13px}}
 .scroll{{overflow-x:auto}}
 </style></head><body><main>
-<h1>Salud de la batería</h1>
+<h1>{e(tr('Salud de la batería'))}</h1>
 <p class="sub">{e(platform.system())} · {e(platform.node())} · {e(r['fecha'])}</p>
 {''.join(bloques)}
 {autonomia}
-<div class="card"><h2>Programas que más consumen ahora</h2>
+<div class="card"><h2>{e(tr('Programas que más consumen ahora'))}</h2>
 <p class="nota">Medido durante {r['segundos']:.0f} s. CPU en % de un núcleo, sumando todas las ventanas o procesos del mismo programa.
 {'"Impacto" es el impacto energético que calcula macOS.' if impacto_col else ''}</p>
 <div class="scroll"><table class="procs"><tr><th>Programa</th><th>CPU</th><th>Memoria</th><th>{'Impacto' if impacto_col else ''}</th></tr>{procs}</table></div></div>
-{'<div class="card"><h2>Ajustes de energía</h2><table>' + ajustes + '</table></div>' if ajustes else ''}
-<div class="card"><h2>Consejos para cuidar la batería</h2><ol>{consejos}</ol></div>
+{f'<div class="card"><h2>{e(tr("Ajustes de energía"))}</h2><table>' + ajustes + '</table></div>' if ajustes else ''}
+<div class="card"><h2>{e(tr('Consejos para cuidar la batería'))}</h2><ol>{consejos}</ol></div>
 <p class="nota">La salud se calcula como capacidad actual ÷ capacidad de fábrica, según lo que el firmware de la batería informa al sistema. Es igual para cualquier marca de portátil.</p>
 </main></body></html>"""
 

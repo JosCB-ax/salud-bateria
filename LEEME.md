@@ -101,6 +101,13 @@ administrador: `powercfg` necesita permisos para escribir el informe.
 - **Modo oscuro**: automático según el sistema, o fijo claro u oscuro en Ajustes.
 - **Actualizaciones**: al abrirse busca versiones nuevas en GitHub (una vez al
   día) y se ofrece a instalarlas.
+- **Predicción del desgaste**: al ritmo de desgaste del último año, cuándo llegará
+  al 80 % y al 60 %.
+- **Aviso de temperatura**: el icono avisa si la batería pasa de 40 °C (editable),
+  en los equipos cuyo sistema informa de la temperatura de la batería.
+- **Modo ahorro con un clic**: plan de ahorro y brillo bajo; se deshace solo al enchufar.
+- **Asistente de calibración**: guía los pasos y compara la salud antes y después.
+- **Idiomas**: español e inglés (Ajustes > Idioma).
 - **Exportar a PDF**: el informe completo con la gráfica.
 - **Ajustes de energía**: plan de energía, brillo, modo de bajo consumo.
 
@@ -120,6 +127,9 @@ administrador: `powercfg` necesita permisos para escribir el informe.
 | `prueba.py` | prueba de autonomía guiada |
 | `tema.py` | tema claro u oscuro |
 | `actualizaciones.py` | búsqueda e instalación de versiones nuevas |
+| `prediccion.py` | predicción del desgaste |
+| `ahorro.py` | modo ahorro con un clic |
+| `idioma.py` | traducción al inglés |
 | `consejos.py` | diagnóstico y consejos a partir de lo medido |
 | `informe.py` | informe HTML y salida de texto |
 | `construir_instalador.bat` | crea el instalador de Windows |

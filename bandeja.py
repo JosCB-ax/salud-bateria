@@ -16,6 +16,8 @@ import threading
 import time
 
 import configuracion
+import idioma
+from idioma import t as tr
 from lectores import ejecutar
 
 PUERTO_UNICO = 47231  # impide abrir dos iconos a la vez
@@ -40,9 +42,22 @@ def decidir_aviso(estado: dict, porcentaje: float, enchufado: bool, cfg: dict) -
     return None
 
 
+def decidir_aviso_temperatura(estado: dict, temperatura: float | None, cfg: dict) -> str | None:
+    if temperatura is None or not cfg.get("aviso_temperatura", True):
+        return None
+    limite = cfg.get("umbral_temp", 40)
+    if temperatura >= limite and not estado.get("calor"):
+        estado["calor"] = True
+        return (f"La batería está a {temperatura:.0f} °C. Deja respirar las rejillas y evita usarlo "
+                "sobre la cama o las piernas: el calor la desgasta mucho.")
+    if temperatura < limite - MARGEN:
+        estado["calor"] = False
+    return None
+
+
 def notificar(icono, mensaje: str) -> None:
     so = platform.system()
-    titulo = "Salud de la batería"
+    titulo = tr("Salud de la batería")
     if so == "Darwin":
         texto = mensaje.replace('"', "'")
         ejecutar(["osascript", "-e", f'display notification "{texto}" with title "{titulo}"'])
@@ -50,6 +65,10 @@ def notificar(icono, mensaje: str) -> None:
         ejecutar(["notify-send", titulo, mensaje])
     else:
         icono.notify(mensaje, titulo)
+
+
+def _notificar_traducido(icono, mensaje: str) -> None:
+    notificar(icono, tr(mensaje))
 
 
 def abrir_ventana() -> None:
@@ -65,6 +84,7 @@ def main() -> None:
     except OSError:
         return  # ya hay un icono funcionando
 
+    idioma.fijar(configuracion.cargar().get("idioma", "es"))
     import psutil
     import pystray
     from PIL import Image
@@ -73,11 +93,11 @@ def main() -> None:
         parar.set()
         icono.stop()
 
-    icono = pystray.Icon("SaludBateria", Image.open(configuracion.recurso("icono.ico")), "Salud de la batería",
+    icono = pystray.Icon("SaludBateria", Image.open(configuracion.recurso("icono.ico")), tr("Salud de la batería"),
                          menu=pystray.Menu(
-                             pystray.MenuItem("Abrir Salud de la batería", lambda *_: abrir_ventana(),
+                             pystray.MenuItem(tr("Abrir Salud de la batería"), lambda *_: abrir_ventana(),
                                               default=True),
-                             pystray.MenuItem("Salir", salir)))
+                             pystray.MenuItem(tr("Salir"), salir)))
     parar = threading.Event()
 
     def apuntar_historial(ultimo_dia: list, vuelta: int) -> None:
@@ -91,12 +111,18 @@ def main() -> None:
                 if bats:
                     historial.registrar(bats[0])
                 ultimo_dia[0] = hoy
-            elif vuelta % 10 == 0:
+            elif vuelta % 5 == 0:
                 rapida = lectura_rapida()
-                if rapida and not rapida.enchufado:
+                if rapida and not rapida.enchufado and vuelta % 10 == 0:
                     historial.registrar(rapida)
+                if rapida:
+                    aviso = decidir_aviso_temperatura(estado_temp, rapida.temperatura_c, configuracion.cargar())
+                    if aviso:
+                        _notificar_traducido(icono, aviso)
         except Exception:  # noqa: BLE001 - el icono nunca debe caerse por esto
             pass
+
+    estado_temp: dict = {}
 
     def vigilar():
         estado: dict = {}
@@ -107,10 +133,15 @@ def main() -> None:
             apuntar_historial(ultimo_dia, vuelta)
             b = psutil.sensors_battery()
             if b is not None:
-                icono.title = f"Salud de la batería · {b.percent:.0f} %" + (" · cargando" if b.power_plugged else "")
-                aviso = decidir_aviso(estado, b.percent, bool(b.power_plugged), configuracion.cargar())
+                icono.title = tr(f"Salud de la batería · {b.percent:.0f} %" + (" · cargando" if b.power_plugged else ""))
+                cfg = configuracion.cargar()
+                aviso = decidir_aviso(estado, b.percent, bool(b.power_plugged), cfg)
                 if aviso:
-                    notificar(icono, aviso)
+                    _notificar_traducido(icono, aviso)
+                if b.power_plugged and cfg.get("ahorro"):
+                    import ahorro
+                    ahorro.desactivar()
+                    _notificar_traducido(icono, "Cargador conectado: el modo ahorro se ha desactivado y todo está como antes.")
             parar.wait(60)
 
     def al_arrancar(icono):

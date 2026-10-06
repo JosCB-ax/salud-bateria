@@ -110,5 +110,57 @@ class TestVersiones(unittest.TestCase):
         self.assertFalse(es_mas_nueva("v1.3.0", "1.3.0"))
 
 
+
+class TestIdioma(unittest.TestCase):
+    def setUp(self):
+        import idioma
+        self.idioma = idioma
+        idioma.fijar("en")
+        self.addCleanup(idioma.fijar, "es")
+
+    def test_plantillas_y_compuestos(self):
+        t = self.idioma.t
+        self.assertEqual(t("Salud de la batería: Buena"), "Battery health: Good")
+        self.assertEqual(t("312 ciclos · carga al 100 % · llena"), "312 cycles · 100 % charged · full")
+        self.assertEqual(t("Pierde 10,8 puntos de salud al año. Llegará al 80 % en un mes aproximadamente."),
+                         "It loses 10,8 health points per year. It will reach 80 % in about a month.")
+        self.assertEqual(t("Modo ahorro activado. Plan de energía: Economizador; Brillo: 90 % → 40 %"),
+                         "Saver mode on. Power plan: Power saver; Brightness: 90 % → 40 %")
+        self.assertEqual(t("texto sin traducción"), "texto sin traducción")
+
+    def test_todos_los_consejos_traducidos(self):
+        from consejos import consejos
+        from lectores import Bateria
+        b = Bateria(capacidad_diseno_mwh=57000, capacidad_actual_mwh=30000, porcentaje=100, enchufado=True,
+                    ciclos=100, temperatura_c=41)
+        for c in consejos(b, [], {"Brillo de pantalla": "90 %"}):
+            self.assertNotEqual(self.idioma.t(c), c, c)
+
+    def test_espanol_no_cambia(self):
+        self.idioma.fijar("es")
+        self.assertEqual(self.idioma.t("Salud de la batería"), "Salud de la batería")
+
+
+class TestPrediccion(unittest.TestCase):
+    def test_ritmo_y_plazos(self):
+        import prediccion
+        hist = [("2025-10-01", 90.0), ("2026-04-01", 85.0), ("2026-10-01", 80.0)]
+        p = prediccion.predecir(82.0, hist)
+        self.assertAlmostEqual(p["ritmo"], 10.0, delta=0.1)
+        self.assertEqual(p["meses"][80], 2)
+        self.assertEqual(p["meses"][60], 26)
+        self.assertIsNone(prediccion.predecir(82.0, hist[:1]))
+        self.assertIsNone(prediccion.predecir(55.0, hist)["meses"][60])
+
+    def test_aviso_temperatura(self):
+        from bandeja import decidir_aviso_temperatura
+        st, cfg = {}, {"aviso_temperatura": True, "umbral_temp": 40}
+        self.assertIsNone(decidir_aviso_temperatura(st, 39, cfg))
+        self.assertIn("41", decidir_aviso_temperatura(st, 41, cfg))
+        self.assertIsNone(decidir_aviso_temperatura(st, 42, cfg))
+        decidir_aviso_temperatura(st, 35, cfg)
+        self.assertIsNotNone(decidir_aviso_temperatura(st, 40, cfg))
+
+
 if __name__ == "__main__":
     unittest.main()

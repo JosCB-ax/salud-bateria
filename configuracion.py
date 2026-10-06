@@ -15,7 +15,7 @@ import os
 import platform
 import sys
 
-POR_DEFECTO = {"avisos": True, "umbral_alto": 80, "umbral_bajo": 20}
+POR_DEFECTO = {"avisos": True, "umbral_alto": 80, "umbral_bajo": 20, "aviso_temperatura": True, "umbral_temp": 40}
 NOMBRE_RUN = "SaludBateria"
 PLIST = os.path.expanduser("~/Library/LaunchAgents/com.saludbateria.bandeja.plist")
 DESKTOP = os.path.expanduser("~/.config/autostart/salud-bateria.desktop")

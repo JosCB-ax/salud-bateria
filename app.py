@@ -19,17 +19,65 @@ from tkinter import filedialog, messagebox, ttk
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import actualizaciones  # noqa: E402
+import ahorro  # noqa: E402
 import configuracion  # noqa: E402
 import historial  # noqa: E402
+import prediccion  # noqa: E402
 from configuracion import recurso  # noqa: E402
 import tema  # noqa: E402
+import idioma  # noqa: E402
+from idioma import t as tr  # noqa: E402
 from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
+
+
+def _traducir_tk():
+    """Traduce al idioma elegido los textos de todos los widgets al crearlos o cambiarlos."""
+    import tkinter.messagebox as mb
+    original_options = tk.Misc._options
+
+    def _options(self, cnf, kw=None):
+        if isinstance(cnf, dict) and isinstance(cnf.get("text"), str):
+            cnf = dict(cnf, text=tr(cnf["text"]))
+        if isinstance(kw, dict) and isinstance(kw.get("text"), str):
+            kw = dict(kw, text=tr(kw["text"]))
+        return original_options(self, cnf, kw)
+
+    tk.Misc._options = _options
+    for clase, metodo in ((ttk.Notebook, "add"), (ttk.Treeview, "heading")):
+        def nuevo(self, *args, _orig=getattr(clase, metodo), **kw):
+            if isinstance(kw.get("text"), str):
+                kw["text"] = tr(kw["text"])
+            return _orig(self, *args, **kw)
+        setattr(clase, metodo, nuevo)
+    original_insert = ttk.Treeview.insert
+
+    def insert(self, parent, index, iid=None, **kw):
+        if "values" in kw:
+            kw["values"] = tuple(tr(v) if isinstance(v, str) else v for v in kw["values"])
+        return original_insert(self, parent, index, iid, **kw)
+
+    ttk.Treeview.insert = insert
+    original_title = tk.Wm.wm_title
+
+    def wm_title(self, string=None):
+        return original_title(self, tr(string) if string else string)
+
+    tk.Wm.wm_title = tk.Wm.title = wm_title
+    original_show = mb._show
+
+    def _show(title=None, message=None, *args, **kw):
+        return original_show(tr(title), tr(message), *args, **kw)
+
+    mb._show = _show
+
+
+_traducir_tk()
 
 
 class App(tk.Tk):
@@ -37,7 +85,7 @@ class App(tk.Tk):
         super().__init__()
         self.demo = demo
         self.resultado = None
-        self.title("Salud de la batería")
+        self._n_analisis = 0
         self.geometry("920x680")
         self.minsize(760, 560)
         try:
@@ -58,6 +106,8 @@ class App(tk.Tk):
         """Crea toda la interfaz con el tema elegido (se repite al cambiar de tema)."""
         for w in self.winfo_children():
             w.destroy()
+        idioma.fijar(configuracion.cargar().get("idioma", "es"))
+        self.title("Salud de la batería")
         self.p = tema.aplicar(self, tema.elegir(configuracion.cargar().get("tema", "automatico")))
         estilo = ttk.Style(self)
         estilo.configure("Titulo.TLabel", font=("Segoe UI", 16, "bold"))
@@ -98,6 +148,7 @@ class App(tk.Tk):
         self.tabla_bat.column("dato", width=280, anchor="w")
         self.tabla_bat.column("valor", width=400, anchor="w")
         self.tabla_bat.pack(fill="both", expand=True)
+        ttk.Button(f, text="Calibrar la batería…", command=self.calibracion).pack(anchor="w", pady=(8, 0))
         self.nb.add(f, text="Batería")
 
         # Autonomía e historial
@@ -107,6 +158,8 @@ class App(tk.Tk):
         self.lbl_autonomia = ttk.Label(f, text="", wraplength=840, justify="left", font=("Segoe UI", 11))
         self.lbl_autonomia.pack(anchor="w", pady=(6, 12))
         ttk.Label(f, text="Evolución de la salud", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        self.lbl_prediccion = ttk.Label(f, text="", wraplength=840, justify="left")
+        self.lbl_prediccion.pack(anchor="w", pady=(4, 0))
         self.grafica = tk.Canvas(f, height=220, bg=self.p["panel"], highlightthickness=1,
                                  highlightbackground=self.p["linea"])
         self.grafica.pack(fill="both", expand=True, pady=(6, 0))
@@ -136,6 +189,13 @@ class App(tk.Tk):
             self.lbl_exacto.pack(side="left", padx=10)
         self.lbl_ajustes = ttk.Label(f, text="", wraplength=820, justify="left")
         self.lbl_ajustes.pack(anchor="w", pady=(8, 0))
+        fila = ttk.Frame(f)
+        fila.pack(anchor="w", pady=(8, 0))
+        self.btn_ahorro = ttk.Button(fila, command=self.alternar_ahorro)
+        self.btn_ahorro.pack(side="left")
+        self.lbl_ahorro = ttk.Label(fila, text="", foreground=self.p["mut"], wraplength=600, justify="left")
+        self.lbl_ahorro.pack(side="left", padx=10)
+        self._pintar_ahorro()
         self.nb.add(f, text="Qué consume más")
 
         # Consejos
@@ -191,6 +251,7 @@ class App(tk.Tk):
         messagebox.showerror("Salud de la batería", f"No se pudo analizar la batería:\n{e}")
 
     def _mostrar(self, r):
+        self._n_analisis += 1
         self.resultado = r
         self.btn_actualizar.state(["!disabled"])
         self.lbl_estado.config(text=f"Actualizado: {r['fecha']}")
@@ -238,10 +299,12 @@ class App(tk.Tk):
         t.config(state="normal")
         t.delete("1.0", "end")
         for i, c in enumerate(r["consejos"], 1):
-            t.insert("end", f"{i}.  {c}\n\n")
+            t.insert("end", f"{i}.  {tr(c)}\n\n")
         t.config(state="disabled")
 
         self._mostrar_autonomia(r["baterias"][0] if r["baterias"] else None)
+        b0 = r["baterias"][0] if r["baterias"] else None
+        self.lbl_prediccion.config(text=prediccion.texto(prediccion.predecir(b0.salud, b0.historial)) if b0 else "")
         self._dibujar_historial()
 
     def _mostrar_autonomia(self, b):
@@ -314,8 +377,8 @@ class App(tk.Tk):
         if not self.resultado:
             return
         ruta = filedialog.asksaveasfilename(
-            title="Guardar informe", defaultextension=".html", initialfile="salud_bateria.html",
-            filetypes=[("Informe HTML", "*.html")])
+            title=tr("Guardar informe"), defaultextension=".html", initialfile="salud_bateria.html",
+            filetypes=[(tr("Informe HTML"), "*.html")])
         if not ruta:
             return
         with open(ruta, "w", encoding="utf-8") as f:
@@ -326,7 +389,7 @@ class App(tk.Tk):
         if not self.resultado:
             return
         ruta = filedialog.asksaveasfilename(
-            title="Exportar a PDF", defaultextension=".pdf", initialfile="salud_bateria.pdf",
+            title=tr("Exportar a PDF"), defaultextension=".pdf", initialfile="salud_bateria.pdf",
             filetypes=[("PDF", "*.pdf")])
         if not ruta:
             return
@@ -372,7 +435,8 @@ class App(tk.Tk):
         avisos = tk.BooleanVar(value=cfg["avisos"])
         alto = tk.IntVar(value=cfg["umbral_alto"])
         bajo = tk.IntVar(value=cfg["umbral_bajo"])
-        temas = {"automatico": "Automático (como el sistema)", "claro": "Claro", "oscuro": "Oscuro"}
+        temas = {k: tr(x) for k, x in {"automatico": "Automático (como el sistema)", "claro": "Claro",
+                                        "oscuro": "Oscuro"}.items()}
         tema_var = tk.StringVar(value=temas.get(cfg.get("tema", "automatico"), temas["automatico"]))
         try:
             arranque = tk.BooleanVar(value=configuracion.arranque_activado())
@@ -392,22 +456,37 @@ class App(tk.Tk):
         ttk.Label(f, text=f"%  (recomendado: {rec['umbral_bajo']})", foreground=self.p["mut"]).grid(
             row=3, column=2, sticky="w", pady=(4, 0))
         ttk.Button(f, text="Restaurar recomendados",
-                   command=lambda: (alto.set(rec["umbral_alto"]), bajo.set(rec["umbral_bajo"]))).grid(
+                   command=lambda: (alto.set(rec["umbral_alto"]), bajo.set(rec["umbral_bajo"]),
+                                    umbral_temp.set(rec["umbral_temp"]))).grid(
             row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(f, text="Iniciar con el ordenador (solo el icono de la bandeja)", variable=arranque).grid(
             row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        aviso_temp = tk.BooleanVar(value=cfg.get("aviso_temperatura", True))
+        umbral_temp = tk.IntVar(value=cfg.get("umbral_temp", rec["umbral_temp"]))
+        ttk.Checkbutton(f, text="Avisar si la batería pasa de", variable=aviso_temp).grid(
+            row=6, column=0, sticky="w", pady=(8, 0))
+        ttk.Spinbox(f, from_=30, to=60, increment=1, textvariable=umbral_temp, width=5).grid(
+            row=6, column=1, pady=(8, 0))
+        ttk.Label(f, text=f"°C  (recomendado: {rec['umbral_temp']})", foreground=self.p["mut"]).grid(
+            row=6, column=2, sticky="w", pady=(8, 0))
+        idiomas = {"es": "Español", "en": "English"}
+        idioma_var = tk.StringVar(value=idiomas.get(cfg.get("idioma", "es"), "Español"))
+        ttk.Label(f, text="Idioma:").grid(row=10, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(f, textvariable=idioma_var, values=list(idiomas.values()), state="readonly", width=28).grid(
+            row=10, column=1, columnspan=2, sticky="w", pady=(6, 0))
 
         ttk.Label(f, text="Aspecto y actualizaciones", font=("Segoe UI", 11, "bold")).grid(
-            row=6, column=0, sticky="w", pady=(16, 0))
-        ttk.Label(f, text="Tema:").grid(row=7, column=0, sticky="w", pady=(6, 0))
+            row=8, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(f, text="Tema:").grid(row=9, column=0, sticky="w", pady=(6, 0))
         ttk.Combobox(f, textvariable=tema_var, values=list(temas.values()), state="readonly", width=28).grid(
-            row=7, column=1, columnspan=2, sticky="w", pady=(6, 0))
+            row=9, column=1, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Checkbutton(f, text="Buscar versiones nuevas al abrir el programa", variable=buscar_act).grid(
-            row=8, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=11, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         def aceptar():
             try:
-                cfg.update(avisos=avisos.get(), umbral_alto=int(alto.get()), umbral_bajo=int(bajo.get()))
+                cfg.update(avisos=avisos.get(), umbral_alto=int(alto.get()), umbral_bajo=int(bajo.get()),
+                           aviso_temperatura=aviso_temp.get(), umbral_temp=int(umbral_temp.get()))
             except (tk.TclError, ValueError):
                 messagebox.showerror("Ajustes", "Los porcentajes deben ser números.", parent=v)
                 return
@@ -415,7 +494,8 @@ class App(tk.Tk):
                 messagebox.showerror("Ajustes", "El aviso para enchufar debe ser menor que el de desenchufar.",
                                      parent=v)
                 return
-            tema_antes = cfg.get("tema", "automatico")
+            tema_antes = (cfg.get("tema", "automatico"), cfg.get("idioma", "es"))
+            cfg["idioma"] = next(k for k, t in idiomas.items() if t == idioma_var.get())
             cfg["tema"] = next(k for k, t in temas.items() if t == tema_var.get())
             cfg["buscar_actualizaciones"] = buscar_act.get()
             configuracion.guardar(cfg)
@@ -426,13 +506,95 @@ class App(tk.Tk):
             if cfg["avisos"]:
                 iniciar_bandeja()
             v.destroy()
-            if cfg["tema"] != tema_antes:
+            if (cfg["tema"], cfg["idioma"]) != tema_antes:
                 self._construir()
 
         botones = ttk.Frame(f)
-        botones.grid(row=9, column=0, columnspan=3, sticky="e", pady=(16, 0))
+        botones.grid(row=12, column=0, columnspan=3, sticky="e", pady=(16, 0))
         ttk.Button(botones, text="Cancelar", command=v.destroy).pack(side="right")
         ttk.Button(botones, text="Guardar", command=aceptar).pack(side="right", padx=8)
+
+    def _pintar_ahorro(self, detalle: str = ""):
+        if ahorro.activo():
+            self.btn_ahorro.config(text="Desactivar modo ahorro")
+            self.lbl_ahorro.config(text=detalle or "Modo ahorro activo. Se desactiva solo al enchufar el cargador.")
+        else:
+            self.btn_ahorro.config(text="Activar modo ahorro")
+            self.lbl_ahorro.config(text=detalle or "Pone el plan de ahorro de energía y baja el brillo; "
+                                                   "al desactivarlo lo deja todo como estaba.")
+
+    def alternar_ahorro(self):
+        self.btn_ahorro.state(["disabled"])
+
+        def trabajo():
+            if ahorro.activo():
+                ahorro.desactivar()
+                detalle = "Modo ahorro desactivado: todo está como antes."
+            else:
+                hecho = ahorro.activar()
+                detalle = "Modo ahorro activado. " + ("; ".join(hecho) if hecho else
+                                                       "Este equipo no permite cambiar plan ni brillo desde aquí.")
+            self.after(0, lambda: (self.btn_ahorro.state(["!disabled"]), self._pintar_ahorro(detalle)))
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def calibracion(self):
+        b = self.resultado["baterias"][0] if self.resultado and self.resultado["baterias"] else None
+        cfg = configuracion.cargar()
+        cal = cfg.get("calibracion")
+        v = tk.Toplevel(self)
+        v.title("Calibrar la batería")
+        v.resizable(False, False)
+        v.transient(self)
+        f = ttk.Frame(v, padding=16)
+        f.pack()
+        ttk.Label(f, wraplength=480, justify="left", text=(
+            "La calibración no repara la batería: corrige la medida que hace su chip, que con el tiempo se "
+            "desajusta y puede marcar menos salud de la real. Hazla como mucho cada 2 o 3 meses.\n\n"
+            "1. Carga al 100 % y déjalo enchufado una o dos horas más.\n"
+            "2. Desenchufa y úsalo con normalidad hasta que se apague solo (o baje al 3-5 %).\n"
+            "3. Déjalo apagado unas horas y cárgalo al 100 % sin interrumpir.\n"
+            "4. Abre el programa y pulsa «He terminado» para comparar.")).pack(anchor="w")
+        estado = ttk.Label(f, text="", wraplength=480, justify="left")
+        estado.pack(anchor="w", pady=(12, 0))
+        botones = ttk.Frame(f)
+        botones.pack(anchor="e", pady=(12, 0))
+
+        def empezar():
+            if not b or b.salud is None:
+                estado.config(text="No se puede leer la salud de esta batería, así que no hay nada que comparar.")
+                return
+            cfg["calibracion"] = {"fecha": time.strftime("%Y-%m-%d"), "salud": b.salud}
+            configuracion.guardar(cfg)
+            estado.config(text=f"Apuntado: salud antes de calibrar {b.salud:.1f} %. Sigue los pasos.")
+
+        def terminar():
+            n_antes = self._n_analisis
+            self.actualizar()
+
+            def comparar():
+                if self._n_analisis == n_antes:  # el análisis aún no ha terminado
+                    v.after(1000, comparar)
+                    return
+                ahora = self.resultado["baterias"][0].salud if self.resultado and self.resultado["baterias"] else None
+                if ahora is None or not cal:
+                    return
+                dif = ahora - cal["salud"]
+                estado.config(text=(f"Antes ({cal['fecha']}): {cal['salud']:.1f} %   ·   Ahora: {ahora:.1f} %   ·   "
+                                    f"Diferencia: {dif:+.1f} puntos. ") + (
+                    "La medida estaba desajustada y ahora es más exacta." if dif >= 1 else
+                    "La medida ya era correcta: este es el desgaste real."))
+                cfg.pop("calibracion", None)
+                configuracion.guardar(cfg)
+            v.after(1000, comparar)
+            estado.config(text="Midiendo…")
+
+        ttk.Button(botones, text="Cerrar", command=v.destroy).pack(side="right")
+        if cal:
+            estado.config(text=f"Calibración empezada el {cal['fecha']} con {cal['salud']:.1f} % de salud.")
+            ttk.Button(botones, text="He terminado: comparar", command=terminar).pack(side="right", padx=8)
+        else:
+            ttk.Button(botones, text="Empezar calibración", command=empezar).pack(side="right", padx=8)
 
     def prueba_autonomia(self):
         import prueba
@@ -453,9 +615,10 @@ class App(tk.Tk):
             row=1, column=1, sticky="w", pady=(12, 0))
         ttk.Label(f, text=f"minutos  (recomendado: {prueba.DURACION_RECOMENDADA}; más tiempo, más precisión)",
                   foreground=self.p["mut"]).grid(row=1, column=2, sticky="w", pady=(12, 0))
-        carga = tk.StringVar(value=prueba.CARGAS["ligera"])
+        cargas = {k: tr(x) for k, x in prueba.CARGAS.items()}
+        carga = tk.StringVar(value=cargas["ligera"])
         ttk.Label(f, text="Tipo de uso:").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        ttk.Combobox(f, textvariable=carga, values=list(prueba.CARGAS.values()), state="readonly",
+        ttk.Combobox(f, textvariable=carga, values=list(cargas.values()), state="readonly",
                      width=58).grid(row=2, column=1, columnspan=2, sticky="w", pady=(6, 0))
         barra = ttk.Progressbar(f, length=460, mode="determinate")
         barra.grid(row=3, column=0, columnspan=3, pady=(14, 0))
@@ -476,7 +639,7 @@ class App(tk.Tk):
             except (tk.TclError, ValueError):
                 messagebox.showerror("Prueba de autonomía", "La duración mínima es de 5 minutos.", parent=v)
                 return
-            clave = next(k for k, t in prueba.CARGAS.items() if t == carga.get())
+            clave = next(k for k, x in cargas.items() if x == carga.get())
             btn_empezar.state(["disabled"])
             barra.configure(maximum=total, value=0)
 
