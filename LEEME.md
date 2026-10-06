@@ -47,7 +47,7 @@ Para sacar una versión nueva, cambia el número en `instalador.iss`,
 Necesitas Python 3.10 o posterior:
 
 ```bash
-pip install psutil
+pip install -r requirements.txt
 ```
 
 `psutil` sirve para medir los programas que más consumen y el nivel de carga.
@@ -89,6 +89,12 @@ administrador: `powercfg` necesita permisos para escribir el informe.
   calculadas con el consumo medio real de este equipo con batería (historial de
   Windows) y con el consumo de este momento si está desenchufado.
 - **Evolución de la salud**: gráfica del historial de capacidad que guarda Windows.
+- **Avisos de carga**: un icono junto al reloj avisa al llegar al 80 % (desenchufa)
+  y al 20 % (enchufa). Los límites se cambian en Ajustes, y puede iniciarse solo
+  con el ordenador (Windows, macOS y Linux).
+- **Consumo exacto por programa** (Windows): reparto de la energía de las
+  últimas 24 h según el registro de Windows; pide permiso de administrador.
+- **Exportar a PDF**: el informe completo con la gráfica.
 - **Ajustes de energía**: plan de energía, brillo, modo de bajo consumo.
 
 ## Archivos
@@ -100,6 +106,9 @@ administrador: `powercfg` necesita permisos para escribir el informe.
 | `lectores.py` | lectura de la batería, un lector por sistema operativo |
 | `consumo.py` | procesos que más consumen y ajustes de energía |
 | `autonomia.py` | autonomía real con el consumo medido |
+| `bandeja.py` | icono de la bandeja y avisos de carga |
+| `configuracion.py` | ajustes del usuario e inicio automático |
+| `pdf.py` | exportación a PDF |
 | `consejos.py` | diagnóstico y consejos a partir de lo medido |
 | `informe.py` | informe HTML y salida de texto |
 | `construir_instalador.bat` | crea el instalador de Windows |

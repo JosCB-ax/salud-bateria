@@ -2,7 +2,7 @@
 ; Lo compila construir_instalador.bat a partir de dist\SaludBateria.
 
 #define Nombre "Salud de la batería"
-#define Version "1.1.0"
+#define Version "1.2.0"
 #define Exe "SaludBateria.exe"
 
 [Setup]
@@ -28,12 +28,19 @@ UninstallDisplayName={#Nombre}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; El inicio automático se guarda en el registro del usuario que instala.
+UsedUserAreasWarning=no
+CloseApplications=force
 
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
+Name: "arranque"; Description: "Iniciar con Windows y avisar al cargar (icono junto al reloj)"; GroupDescription: "Avisos de carga:"
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SaludBateria"; ValueData: """{app}\{#Exe}"" --bandeja"; Tasks: arranque; Flags: uninsdeletevalue
 
 [Files]
 Source: "dist\SaludBateria\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -45,3 +52,7 @@ Name: "{autodesktop}\{#Nombre}"; Filename: "{app}\{#Exe}"; Tasks: escritorio
 
 [Run]
 Filename: "{app}\{#Exe}"; Description: "Abrir {#Nombre} ahora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#Exe}"; Parameters: "--bandeja"; Tasks: arranque; Flags: nowait runasoriginaluser
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM {#Exe} /F"; Flags: runhidden; RunOnceId: "CerrarBandeja"

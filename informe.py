@@ -7,7 +7,6 @@ import html
 import platform
 
 from autonomia import calcular, horas_texto, sin_datos_texto
-from consejos import diagnostico
 
 COLORES = {"excelente": "#1a9e5c", "buena": "#4caf50", "desgastada": "#e6a100",
            "mala": "#d93b3b", "desconocida": "#888"}

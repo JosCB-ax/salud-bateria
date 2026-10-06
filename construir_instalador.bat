@@ -6,13 +6,13 @@ cd /d "%~dp0"
 
 echo.
 echo [1/4] Instalando las herramientas de empaquetado...
-py -m pip install --upgrade pyinstaller psutil
+py -m pip install --upgrade pyinstaller -r requirements.txt
 if errorlevel 1 goto error
 
 echo.
 echo [2/4] Creando SaludBateria.exe...
 py -m PyInstaller --noconfirm --clean --windowed --name SaludBateria ^
-  --icon icono.ico --add-data "icono.ico;." --version-file version.txt app.py
+  --icon icono.ico --add-data "icono.ico;." --version-file version.txt --hidden-import pystray._win32 app.py
 if errorlevel 1 goto error
 
 echo.

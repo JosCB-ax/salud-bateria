@@ -131,6 +131,90 @@ def impacto_energetico_macos() -> dict[str, float]:
                                      "-stats", "command,power"], timeout=20))
 
 
+# ------------------------------------- consumo exacto por programa (Windows)
+
+def _nombre_app(app_id: str) -> str:
+    nombre = re.split(r"[\\/]", app_id.strip().strip("!"))[-1]
+    nombre = nombre.split("!")[0]
+    return re.sub(r"\.exe$", "", nombre, flags=re.I) or app_id
+
+
+def parse_srum_csv(texto: str, horas: float = 24) -> list[tuple[str, float]]:
+    """Reparto de la energía por programa del informe `powercfg /srumutil`.
+
+    Devuelve [(programa, % de la energía total)] de las últimas `horas`. Se usa el
+    porcentaje y no los julios porque Windows estima la energía por componente
+    (CPU, pantalla, disco, red) y el total relativo es lo fiable.
+    """
+    import csv
+    import datetime as dt
+    import io
+
+    filas = list(csv.DictReader(io.StringIO(texto.strip())))
+    if not filas:
+        return []
+    cab = [c.strip() for c in filas[0].keys() if c]
+    col_app = next((c for c in cab if c.lower() == "appid"), None) or next(
+        (c for c in cab if "app" in c.lower()), None)
+    totales = [c for c in cab if c.lower() == "totalenergyconsumption"]
+    energia = totales or [c for c in cab if "energy" in c.lower() and "consumption" in c.lower()]
+    col_t = next((c for c in cab if "timestamp" in c.lower()), None)
+    if not col_app or not energia:
+        return []
+
+    def fecha(v):
+        for f in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d:%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y %I:%M:%S %p"):
+            try:
+                return dt.datetime.strptime(v.strip()[:26], f)
+            except (ValueError, AttributeError):
+                continue
+        return None
+
+    fechas = [fecha(f.get(col_t, "")) for f in filas] if col_t else []
+    limite = None
+    if fechas and any(fechas):
+        limite = max(x for x in fechas if x) - dt.timedelta(hours=horas)
+
+    por_app: dict[str, float] = {}
+    for i, f in enumerate(filas):
+        if limite and fechas[i] and fechas[i] < limite:
+            continue
+        e = 0.0
+        for c in energia:
+            try:
+                e += float((f.get(c) or "0").strip() or 0)
+            except ValueError:
+                pass
+        if e > 0:
+            n = _nombre_app(f.get(col_app) or "?")
+            por_app[n] = por_app.get(n, 0) + e
+    total = sum(por_app.values())
+    if not total:
+        return []
+    return [(n, round(100 * e / total, 1))
+            for n, e in sorted(por_app.items(), key=lambda x: x[1], reverse=True)[:10]]
+
+
+def consumo_exacto_windows() -> list[tuple[str, float]] | None:
+    """Pide permiso de administrador, lee la energía por programa de Windows (SRUM).
+
+    Devuelve None si el usuario no da permiso o Windows no genera el informe.
+    """
+    import tempfile
+    ruta = os.path.join(tempfile.gettempdir(), "salud_bateria_srum.csv")
+    if os.path.exists(ruta):
+        os.remove(ruta)
+    ejecutar(["powershell", "-NoProfile", "-Command",
+              "Start-Process powercfg -Verb RunAs -Wait -WindowStyle Hidden "
+              f"-ArgumentList '/srumutil','/output','\"{ruta}\"','/csv'"], timeout=180)
+    if not os.path.exists(ruta):
+        return None
+    with open(ruta, "rb") as f:
+        crudo = f.read()
+    texto = crudo.decode("utf-16") if crudo[:2] in (b"\xff\xfe", b"\xfe\xff") else crudo.decode("utf-8-sig", "replace")
+    return parse_srum_csv(texto)
+
+
 # ------------------------------------------------- ajustes que afectan al gasto
 
 def _cmd(cmd: list[str]) -> str:

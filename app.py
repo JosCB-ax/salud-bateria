@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 import sys
+import platform
+import subprocess
 import threading
 import tkinter as tk
 import webbrowser
@@ -15,19 +17,15 @@ from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import configuracion  # noqa: E402
+from configuracion import recurso  # noqa: E402
 from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
-
-
-def recurso(nombre: str) -> str:
-    """Ruta a un archivo incluido en el programa (también dentro del .exe)."""
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, nombre)
 
 
 class App(tk.Tk):
@@ -54,6 +52,8 @@ class App(tk.Tk):
         self._barra()  # antes que las pestañas, para que siempre quede visible abajo
         self._pestanas()
         self.after(100, self.actualizar)
+        if not demo and configuracion.cargar().get("avisos"):
+            iniciar_bandeja()
 
     # ------------------------------------------------------------ interfaz
 
@@ -113,6 +113,14 @@ class App(tk.Tk):
         self.lbl_consejo_proc = ttk.Label(f, text="Selecciona un programa para ver cómo reducir su consumo.",
                                           wraplength=820, justify="left", foreground="#555")
         self.lbl_consejo_proc.pack(anchor="w", pady=(8, 0))
+        if platform.system() == "Windows":
+            fila = ttk.Frame(f)
+            fila.pack(anchor="w", pady=(8, 0))
+            self.btn_exacto = ttk.Button(fila, text="Medir consumo exacto (24 h)…", command=self.consumo_exacto)
+            self.btn_exacto.pack(side="left")
+            self.lbl_exacto = ttk.Label(fila, text="Usa el registro de energía de Windows; pide permiso de administrador.",
+                                        foreground="#666", wraplength=600, justify="left")
+            self.lbl_exacto.pack(side="left", padx=10)
         self.lbl_ajustes = ttk.Label(f, text="", wraplength=820, justify="left")
         self.lbl_ajustes.pack(anchor="w", pady=(8, 0))
         self.nb.add(f, text="Qué consume más")
@@ -132,7 +140,9 @@ class App(tk.Tk):
         b.pack(side="bottom", fill="x")
         self.btn_actualizar = ttk.Button(b, text="Actualizar", command=self.actualizar)
         self.btn_actualizar.pack(side="left")
+        ttk.Button(b, text="Exportar PDF…", command=self.exportar_pdf).pack(side="left", padx=(8, 0))
         ttk.Button(b, text="Guardar informe…", command=self.guardar).pack(side="left", padx=8)
+        ttk.Button(b, text="Ajustes", command=self.ajustes).pack(side="right", padx=(0, 8))
         ttk.Button(b, text="Acerca de", command=self.acerca).pack(side="right")
         self.lbl_estado = ttk.Label(b, text="", foreground="#666")
         self.lbl_estado.pack(side="left", padx=12)
@@ -295,13 +305,112 @@ class App(tk.Tk):
             f.write(html_informe(self.resultado))
         webbrowser.open("file:///" + os.path.abspath(ruta).replace("\\", "/"))
 
+    def exportar_pdf(self):
+        if not self.resultado:
+            return
+        ruta = filedialog.asksaveasfilename(
+            title="Exportar a PDF", defaultextension=".pdf", initialfile="salud_bateria.pdf",
+            filetypes=[("PDF", "*.pdf")])
+        if not ruta:
+            return
+        from pdf import exportar_pdf
+        try:
+            exportar_pdf(self.resultado, ruta)
+        except Exception as e:  # noqa: BLE001 - se muestra al usuario
+            messagebox.showerror("Exportar PDF", f"No se pudo crear el PDF:\n{e}")
+            return
+        webbrowser.open("file:///" + os.path.abspath(ruta).replace("\\", "/"))
+
+    def consumo_exacto(self):
+        self.btn_exacto.state(["disabled"])
+        self.lbl_exacto.config(text="Acepta el permiso de Windows y espera unos segundos…")
+
+        def trabajo():
+            from consumo import consumo_exacto_windows
+            datos = consumo_exacto_windows()
+            self.after(0, mostrar, datos)
+
+        def mostrar(datos):
+            self.btn_exacto.state(["!disabled"])
+            if datos is None:
+                texto = "No se pudo leer: hace falta aceptar el permiso de administrador."
+            elif not datos:
+                texto = "Windows no tiene datos de energía por programa de las últimas 24 h."
+            else:
+                texto = "Energía gastada en las últimas 24 h:  " + "   ·   ".join(
+                    f"{n} {pc:.0f} %" for n, pc in datos[:8])
+            self.lbl_exacto.config(text=texto, foreground="#1d2330")
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def ajustes(self):
+        cfg = configuracion.cargar()
+        v = tk.Toplevel(self)
+        v.title("Ajustes")
+        v.resizable(False, False)
+        v.transient(self)
+        f = ttk.Frame(v, padding=16)
+        f.pack()
+        avisos = tk.BooleanVar(value=cfg["avisos"])
+        alto = tk.IntVar(value=cfg["umbral_alto"])
+        bajo = tk.IntVar(value=cfg["umbral_bajo"])
+        try:
+            arranque = tk.BooleanVar(value=configuracion.arranque_activado())
+        except OSError:
+            arranque = tk.BooleanVar(value=False)
+        ttk.Checkbutton(f, text="Avisarme desde la bandeja del sistema", variable=avisos).grid(
+            row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(f, text="Avisar para desenchufar al llegar a (%):").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Spinbox(f, from_=50, to=100, increment=5, textvariable=alto, width=5).grid(row=1, column=1, pady=(8, 0))
+        ttk.Label(f, text="Avisar para enchufar al bajar de (%):").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Spinbox(f, from_=5, to=50, increment=5, textvariable=bajo, width=5).grid(row=2, column=1, pady=(4, 0))
+        ttk.Checkbutton(f, text="Iniciar con el ordenador (solo el icono de la bandeja)", variable=arranque).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(12, 0))
+
+        def aceptar():
+            try:
+                cfg.update(avisos=avisos.get(), umbral_alto=int(alto.get()), umbral_bajo=int(bajo.get()))
+            except (tk.TclError, ValueError):
+                messagebox.showerror("Ajustes", "Los porcentajes deben ser números.", parent=v)
+                return
+            if cfg["umbral_bajo"] >= cfg["umbral_alto"]:
+                messagebox.showerror("Ajustes", "El aviso para enchufar debe ser menor que el de desenchufar.",
+                                     parent=v)
+                return
+            configuracion.guardar(cfg)
+            try:
+                configuracion.fijar_arranque(arranque.get())
+            except OSError as e:
+                messagebox.showwarning("Ajustes", f"No se pudo cambiar el inicio automático:\n{e}", parent=v)
+            if cfg["avisos"]:
+                iniciar_bandeja()
+            v.destroy()
+
+        botones = ttk.Frame(f)
+        botones.grid(row=4, column=0, columnspan=2, sticky="e", pady=(16, 0))
+        ttk.Button(botones, text="Cancelar", command=v.destroy).pack(side="right")
+        ttk.Button(botones, text="Guardar", command=aceptar).pack(side="right", padx=8)
+
     def acerca(self):
         messagebox.showinfo("Acerca de", f"Salud de la batería {VERSION}\n\n"
                             "Mide el desgaste real de la batería con los datos que su firmware "
                             "da al sistema operativo, por eso funciona con cualquier marca de portátil.")
 
 
+def iniciar_bandeja():
+    """Arranca el icono de la bandeja si no está ya funcionando (él mismo lo comprueba)."""
+    extra = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+    try:
+        subprocess.Popen(configuracion.orden_bandeja(), **extra)
+    except OSError:
+        pass
+
+
 def main():
+    if "--bandeja" in sys.argv:
+        import bandeja
+        bandeja.main()
+        return
     App(demo="--demo" in sys.argv).mainloop()
 
 
