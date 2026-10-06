@@ -6,6 +6,7 @@ import datetime as dt
 import html
 import platform
 
+from autonomia import calcular, horas_texto, sin_datos_texto
 from consejos import diagnostico
 
 COLORES = {"excelente": "#1a9e5c", "buena": "#4caf50", "desgastada": "#e6a100",
@@ -38,6 +39,36 @@ def _filas(b) -> list[tuple[str, str]]:
     ]
 
 
+def _autonomia_lineas(b) -> list[str]:
+    escenarios = calcular(b)
+    if not escenarios:
+        return [sin_datos_texto(b)]
+    lineas = []
+    for e in escenarios:
+        l = f"{e.titulo} ({e.vatios:.1f} W): carga completa hoy {horas_texto(e.horas_hoy)}"
+        if e.horas_nueva:
+            l += f", cuando era nueva {horas_texto(e.horas_nueva)}"
+        lineas.append(l + ".")
+    return lineas
+
+
+def _svg_historial(datos) -> str:
+    if len(datos) < 2:
+        return ""
+    vals = [v for _, v in datos]
+    y_min, y_max = min(70, int(min(vals) // 10 * 10)), 100
+    pts = " ".join(f"{40 + 540 * i / (len(datos) - 1):.1f},{10 + 160 * (y_max - v) / (y_max - y_min):.1f}"
+                   for i, v in enumerate(vals))
+    y80 = 10 + 160 * (y_max - 80) / (y_max - y_min)
+    return (f'<svg viewBox="0 0 600 200" style="width:100%;max-width:600px">'
+            f'<line x1="40" x2="580" y1="{y80:.1f}" y2="{y80:.1f}" stroke="#e6a100" stroke-dasharray="4 3"/>'
+            f'<text x="44" y="{y80 + 14:.1f}" font-size="11" fill="#e6a100">80 %</text>'
+            f'<polyline points="{pts}" fill="none" stroke="var(--acc)" stroke-width="2.5"/>'
+            f'<text x="40" y="195" font-size="11" fill="currentColor">{html.escape(datos[0][0])}</text>'
+            f'<text x="580" y="195" font-size="11" text-anchor="end" fill="currentColor">'
+            f'{html.escape(datos[-1][0])} · {datos[-1][1]:.0f} %</text></svg>')
+
+
 def texto(r: dict) -> str:
     l = [f"=== Salud de la batería · {platform.system()} · {r['fecha']} ===", ""]
     if not r["baterias"]:
@@ -48,6 +79,8 @@ def texto(r: dict) -> str:
             if v not in ("—",):
                 l.append(f"  {k:<36}{v}")
         l.extend(f"  · {n}" for n in b.notas)
+        l.append("  Autonomía real:")
+        l.extend(f"    {x}" for x in _autonomia_lineas(b))
         l.append("")
     if r["ajustes"]:
         l.append("Ajustes de energía:")
@@ -96,6 +129,13 @@ def html_informe(r: dict) -> str:
         for p in r["procesos"])
     impacto_col = any(p.impacto is not None for p in r["procesos"])
     ajustes = "".join(f"<tr><th>{e(k)}</th><td>{e(v)}</td></tr>" for k, v in r["ajustes"].items())
+    autonomia = ""
+    if r["baterias"]:
+        b0 = r["baterias"][0]
+        autonomia = ('<div class="card"><h2>Autonomía real con la configuración de este equipo</h2>'
+                     + "".join(f"<p>{e(x)}</p>" for x in _autonomia_lineas(b0))
+                     + (f"<h2>Evolución de la salud</h2>{_svg_historial(b0.historial)}" if len(b0.historial) > 1 else "")
+                     + "</div>")
     consejos = "".join(f"<li>{e(c)}</li>" for c in r["consejos"])
 
     return f"""<!doctype html>
@@ -127,6 +167,7 @@ ol li{{margin-bottom:8px}} .nota{{color:var(--mut);font-size:13px}}
 <h1>Salud de la batería</h1>
 <p class="sub">{e(platform.system())} · {e(platform.node())} · {e(r['fecha'])}</p>
 {''.join(bloques)}
+{autonomia}
 <div class="card"><h2>Programas que más consumen ahora</h2>
 <p class="nota">Medido durante {r['segundos']:.0f} s. CPU en % de un núcleo, sumando todas las ventanas o procesos del mismo programa.
 {'"Impacto" es el impacto energético que calcula macOS.' if impacto_col else ''}</p>

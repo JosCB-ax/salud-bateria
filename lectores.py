@@ -46,6 +46,9 @@ class Bateria:
     salud_so: float | None = None               # % que da el SO, si lo da
     unidad: str = "mWh"
     notas: list[str] = field(default_factory=list)
+    historial: list[tuple[str, float]] = field(default_factory=list)  # (fecha, salud %)
+    consumo_medio_w: float | None = None        # consumo medio real en batería
+    horas_medidas: float | None = None          # horas de uso en que se basa esa media
 
     @property
     def salud(self) -> float | None:
@@ -160,6 +163,44 @@ def parse_battery_report_xml(xml_texto: str) -> list[Bateria]:
     return baterias
 
 
+def _duracion_horas(texto: str | None) -> float:
+    """Convierte una duración ISO 8601 (p. ej. "PT2H30M") a horas."""
+    m = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?)?", (texto or "").strip())
+    if not m:
+        return 0.0
+    d, h, mi, s = (float(x) if x else 0.0 for x in m.groups())
+    return d * 24 + h + mi / 60 + s / 3600
+
+
+def parse_historial_xml(xml_texto: str, entradas_consumo: int = 14):
+    """Historial de capacidad y consumo medio real en batería del informe de powercfg.
+
+    Devuelve (historial, consumo_medio_w, horas_medidas). El historial es una
+    lista de (fecha, salud %). El consumo sale de la energía gastada con el
+    portátil desenchufado (ActiveDcEnergy) entre el tiempo de uso (ActiveDcTime)
+    de los últimos periodos, así que refleja la configuración y el uso reales.
+    """
+    raiz = ET.fromstring(xml_texto)
+    filas = []
+    for el in raiz.iter():
+        if not el.tag.endswith("HistoryEntry"):
+            continue
+        a = el.attrib
+        fecha = (a.get("LocalEndDate") or a.get("EndDate") or a.get("LocalStartDate") or "")[:10]
+        diseno, actual = _num(a.get("DesignCapacity")), _num(a.get("FullChargeCapacity"))
+        filas.append((fecha, diseno, actual, _num(a.get("ActiveDcEnergy")) or 0,
+                      _duracion_horas(a.get("ActiveDcTime"))))
+    filas.sort(key=lambda f: f[0])
+
+    historial = [(f, round(100 * act / dis, 1)) for f, dis, act, _, _ in filas if f and dis and act]
+
+    con_uso = [(e, h) for _, _, _, e, h in filas if e > 0 and h > 0][-entradas_consumo:]
+    energia = sum(e for e, _ in con_uso)
+    horas = sum(h for _, h in con_uso)
+    consumo = round(energia / 1000 / horas, 2) if horas >= 0.5 else None
+    return historial, consumo, (round(horas, 1) if consumo else None)
+
+
 def _ps_json(script: str):
     salida = ejecutar(["powershell", "-NoProfile", "-Command",
                    script + " | ConvertTo-Json -Compress"])
@@ -174,15 +215,17 @@ def _ps_json(script: str):
 
 def leer_windows() -> list[Bateria]:
     baterias: list[Bateria] = []
+    xml_informe = ""
     with tempfile.TemporaryDirectory() as tmp:
         ruta = os.path.join(tmp, "battery.xml")
         ejecutar(["powercfg", "/batteryreport", "/xml", "/output", ruta], timeout=60)
         if os.path.exists(ruta):
             with open(ruta, encoding="utf-8", errors="replace") as f:
-                try:
-                    baterias = parse_battery_report_xml(f.read())
-                except ET.ParseError:
-                    baterias = []
+                xml_informe = f.read()
+            try:
+                baterias = parse_battery_report_xml(xml_informe)
+            except ET.ParseError:
+                baterias = []
 
     if not baterias:  # respaldo por WMI (a veces necesita administrador)
         est = _ps_json(r"Get-CimInstance -Namespace root\wmi -ClassName BatteryStaticData "
@@ -211,8 +254,12 @@ def leer_windows() -> list[Bateria]:
             b.potencia_w = round(rate / 1000, 2)
         b.enchufado = bool(e.get("PowerOnline"))
         b.estado = "cargando" if e.get("Charging") else ("enchufado" if b.enchufado else "descargando")
-    if not baterias:
-        return []
+    if baterias and xml_informe:
+        try:
+            b = baterias[0]
+            b.historial, b.consumo_medio_w, b.horas_medidas = parse_historial_xml(xml_informe)
+        except ET.ParseError:
+            pass
     return baterias
 
 

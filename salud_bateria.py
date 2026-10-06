@@ -28,7 +28,10 @@ from lectores import Bateria, leer_baterias  # noqa: E402
 def datos_demo():
     b = Bateria(nombre="BAT0", fabricante="Ejemplo", modelo="DEMO-45", quimica="Li-ion",
                 capacidad_diseno_mwh=57000, capacidad_actual_mwh=46170, porcentaje=100,
-                ciclos=312, temperatura_c=36.5, enchufado=True, estado="llena", potencia_w=0)
+                ciclos=312, temperatura_c=36.5, enchufado=True, estado="llena", potencia_w=0,
+                carga_actual_mwh=46170, consumo_medio_w=9.4, horas_medidas=63)
+    b.historial = [(f"{2024 + (i + 9) // 12}-{(i + 9) % 12 + 1:02d}-01", round(100 - 19 * (i / 24) ** 1.2, 1))
+                   for i in range(25)]
     procs = [Proceso("chrome", 48.2, 1830, 23), Proceso("Teams", 12.5, 640, 6),
              Proceso("OneDrive", 6.1, 120, 1), Proceso("python3", 2.0, 40, 1)]
     for p in procs:

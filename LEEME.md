@@ -24,6 +24,8 @@ HP en la BIOS, MSI Center, Samsung Settings). El programa lo dice en los consejo
 
 ## Instalarlo como un programa más (Windows)
 
+0. Lo normal es descargar el instalador ya hecho desde la sección Releases de
+   GitHub, que se genera solo con cada cambio. Para crearlo a mano:
 1. Haz doble clic en `construir_instalador.bat`. Instala lo que necesita
    (PyInstaller e Inno Setup), crea el programa y al final abre la carpeta
    `instalador` con `SaludBateria-Setup-1.0.0.exe`.
@@ -83,6 +85,10 @@ administrador: `powercfg` necesita permisos para escribir el informe.
   pestaña). En macOS añade además el impacto energético que calcula el sistema.
   Ningún sistema reparte los vatios por programa sin permisos de
   administrador, así que esto es la mejor aproximación.
+- **Autonomía real**: horas que da una carga completa hoy y cuando era nueva,
+  calculadas con el consumo medio real de este equipo con batería (historial de
+  Windows) y con el consumo de este momento si está desenchufado.
+- **Evolución de la salud**: gráfica del historial de capacidad que guarda Windows.
 - **Ajustes de energía**: plan de energía, brillo, modo de bajo consumo.
 
 ## Archivos
@@ -93,6 +99,7 @@ administrador: `powercfg` necesita permisos para escribir el informe.
 | `salud_bateria.py` | versión de terminal y opciones de la línea de órdenes |
 | `lectores.py` | lectura de la batería, un lector por sistema operativo |
 | `consumo.py` | procesos que más consumen y ajustes de energía |
+| `autonomia.py` | autonomía real con el consumo medido |
 | `consejos.py` | diagnóstico y consejos a partir de lo medido |
 | `informe.py` | informe HTML y salida de texto |
 | `construir_instalador.bat` | crea el instalador de Windows |

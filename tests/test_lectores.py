@@ -7,7 +7,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from consejos import consejos, diagnostico  # noqa: E402
 from consumo import parse_top_macos  # noqa: E402
-from lectores import bateria_desde_ioreg, leer_linux, parse_battery_report_xml, parse_ioreg  # noqa: E402
+from autonomia import calcular  # noqa: E402
+from lectores import (Bateria, bateria_desde_ioreg, leer_linux, parse_battery_report_xml,  # noqa: E402
+                      parse_historial_xml, parse_ioreg)
 
 XML_WINDOWS = """<?xml version="1.0" encoding="utf-8"?>
 <BatteryReport xmlns="http://schemas.microsoft.com/battery/2012">
@@ -21,6 +23,17 @@ XML_WINDOWS = """<?xml version="1.0" encoding="utf-8"?>
       <CycleCount>214</CycleCount>
     </Battery>
   </Batteries>
+  <History>
+    <HistoryEntry LocalStartDate="2025-01-01T00:00:00" LocalEndDate="2025-01-08T00:00:00"
+      ActiveAcTime="PT20H" ActiveDcTime="PT4H" ActiveDcEnergy="40000" CsDcTime="PT0S"
+      DesignCapacity="57000" FullChargeCapacity="57000" CycleCount="10"/>
+    <HistoryEntry LocalStartDate="2026-09-28T00:00:00" LocalEndDate="2026-10-05T00:00:00"
+      ActiveAcTime="PT30H" ActiveDcTime="PT5H30M" ActiveDcEnergy="44000" CsDcTime="PT0S"
+      DesignCapacity="57000" FullChargeCapacity="48450" CycleCount="214"/>
+    <HistoryEntry LocalStartDate="2026-10-05T00:00:00" LocalEndDate="2026-10-06T00:00:00"
+      ActiveAcTime="PT8H" ActiveDcTime="PT0S" ActiveDcEnergy="0"
+      DesignCapacity="57000" FullChargeCapacity="48450" CycleCount="214"/>
+  </History>
 </BatteryReport>"""
 
 IOREG_MAC = """
@@ -62,6 +75,21 @@ class TestLectores(unittest.TestCase):
         self.assertEqual(b.capacidad_actual_mwh, 48450)
         self.assertEqual(b.ciclos, 214)
         self.assertEqual(b.salud, 85.0)
+
+    def test_windows_historial_y_autonomia(self):
+        historial, consumo, horas = parse_historial_xml(XML_WINDOWS)
+        self.assertEqual(historial[0], ("2025-01-08", 100.0))
+        self.assertEqual(historial[-1], ("2026-10-06", 85.0))
+        self.assertEqual(horas, 9.5)                # 4 h + 5 h 30 min con batería
+        self.assertEqual(consumo, round(84 / 9.5, 2))  # 84 Wh gastados en 9,5 h
+        b = Bateria(capacidad_diseno_mwh=57000, capacidad_actual_mwh=48450, enchufado=True,
+                    consumo_medio_w=consumo, horas_medidas=horas)
+        (e,) = calcular(b)
+        self.assertAlmostEqual(e.horas_hoy, 48.45 / consumo, places=1)
+        self.assertAlmostEqual(e.horas_nueva, 57 / consumo, places=1)
+
+    def test_autonomia_sin_datos(self):
+        self.assertEqual(calcular(Bateria(capacidad_actual_mwh=40000, enchufado=True)), [])
 
     def test_macos_ioreg(self):
         d = parse_ioreg(IOREG_MAC)

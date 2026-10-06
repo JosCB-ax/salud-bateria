@@ -2,7 +2,7 @@
 ; Lo compila construir_instalador.bat a partir de dist\SaludBateria.
 
 #define Nombre "Salud de la batería"
-#define Version "1.0.0"
+#define Version "1.1.0"
 #define Exe "SaludBateria.exe"
 
 [Setup]

@@ -15,10 +15,11 @@ from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 
@@ -85,6 +86,19 @@ class App(tk.Tk):
         self.tabla_bat.column("valor", width=400, anchor="w")
         self.tabla_bat.pack(fill="both", expand=True)
         self.nb.add(f, text="Batería")
+
+        # Autonomía e historial
+        f = ttk.Frame(self.nb, padding=12)
+        ttk.Label(f, text="Autonomía real con la configuración de este equipo",
+                  font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        self.lbl_autonomia = ttk.Label(f, text="", wraplength=840, justify="left", font=("Segoe UI", 11))
+        self.lbl_autonomia.pack(anchor="w", pady=(6, 12))
+        ttk.Label(f, text="Evolución de la salud", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        self.grafica = tk.Canvas(f, height=220, bg="white", highlightthickness=1,
+                                 highlightbackground="#e4e6ea")
+        self.grafica.pack(fill="both", expand=True, pady=(6, 0))
+        self.grafica.bind("<Configure>", lambda _e: self._dibujar_historial())
+        self.nb.add(f, text="Autonomía e historial")
 
         # Consumo
         f = ttk.Frame(self.nb, padding=8)
@@ -204,6 +218,61 @@ class App(tk.Tk):
         for i, c in enumerate(r["consejos"], 1):
             t.insert("end", f"{i}.  {c}\n\n")
         t.config(state="disabled")
+
+        self._mostrar_autonomia(r["baterias"][0] if r["baterias"] else None)
+        self._dibujar_historial()
+
+    def _mostrar_autonomia(self, b):
+        if b is None:
+            self.lbl_autonomia.config(text="No hay batería.")
+            return
+        escenarios = calcular(b)
+        if not escenarios:
+            self.lbl_autonomia.config(text=sin_datos_texto(b))
+            return
+        lineas = []
+        for e in escenarios:
+            lineas.append(f"{e.titulo} ({e.vatios:.1f} W, {e.detalle}):")
+            linea = f"    Carga completa hoy: {horas_texto(e.horas_hoy)}"
+            if e.horas_nueva:
+                linea += f"   ·   cuando era nueva: {horas_texto(e.horas_nueva)}"
+            if e.horas_carga_actual and not b.enchufado:
+                linea += f"   ·   con la carga actual: {horas_texto(e.horas_carga_actual)}"
+            lineas.append(linea)
+        if escenarios[0].horas_nueva:
+            perdido = escenarios[0].horas_nueva - escenarios[0].horas_hoy
+            lineas.append(f"\nEl desgaste te cuesta {horas_texto(perdido)} de autonomía por carga.")
+        self.lbl_autonomia.config(text="\n".join(lineas))
+
+    def _dibujar_historial(self):
+        c = self.grafica
+        c.delete("all")
+        b = self.resultado["baterias"][0] if self.resultado and self.resultado["baterias"] else None
+        datos = b.historial if b else []
+        w, h = c.winfo_width(), c.winfo_height()
+        if len(datos) < 2:
+            c.create_text(w / 2, h / 2, fill="#888", font=("Segoe UI", 10), text=(
+                "Windows aún no tiene historial suficiente de esta batería." if b else ""))
+            return
+        izq, der, arr, abj = 48, 16, 14, 28
+        vals = [v for _, v in datos]
+        y_min = min(70, int(min(vals) // 10 * 10))
+        y_max = max(100, int(-(-max(vals) // 10) * 10))
+        x = lambda i: izq + (w - izq - der) * i / (len(datos) - 1)  # noqa: E731
+        y = lambda v: arr + (h - arr - abj) * (y_max - v) / (y_max - y_min)  # noqa: E731
+        for v in range(y_min, y_max + 1, 10):
+            c.create_line(izq, y(v), w - der, y(v), fill="#eef0f3")
+            c.create_text(izq - 6, y(v), text=f"{v} %", anchor="e", fill="#888", font=("Segoe UI", 8))
+        c.create_line(izq, y(80), w - der, y(80), fill="#e6a100", dash=(4, 3))
+        c.create_text(izq + 6, y(80) + 8, text="80 %: límite de desgaste normal", anchor="w",
+                      fill="#e6a100", font=("Segoe UI", 8))
+        puntos = [(x(i), y(v)) for i, (_, v) in enumerate(datos)]
+        c.create_line(*[p for xy in puntos for p in xy], fill="#2f6fed", width=2)
+        for px, py in (puntos[0], puntos[-1]):
+            c.create_oval(px - 3, py - 3, px + 3, py + 3, fill="#2f6fed", outline="")
+        c.create_text(izq, h - 10, text=datos[0][0], anchor="w", fill="#666", font=("Segoe UI", 8))
+        c.create_text(w - der, h - 10, text=f"{datos[-1][0]}  ·  {datos[-1][1]:.0f} %",
+                      anchor="e", fill="#666", font=("Segoe UI", 8))
 
     def _consejo_proceso(self, _evento):
         sel = self.tabla_proc.selection()
