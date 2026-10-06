@@ -200,10 +200,19 @@ def consumo_exacto_windows() -> list[tuple[str, float]] | None:
 
     Devuelve None si el usuario no da permiso o Windows no genera el informe.
     """
+    import shutil
     import tempfile
-    ruta = os.path.join(tempfile.gettempdir(), "salud_bateria_srum.csv")
-    if os.path.exists(ruta):
-        os.remove(ruta)
+    # carpeta nueva con nombre al azar: el proceso con permisos de administrador no
+    # escribe en una ruta que otro programa haya podido preparar de antemano
+    carpeta = tempfile.mkdtemp(prefix="SaludBateria-")
+    ruta = os.path.join(carpeta, "srum.csv")
+    try:
+        return _leer_srum(ruta)
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+def _leer_srum(ruta: str) -> list[tuple[str, float]] | None:
     ejecutar(["powershell", "-NoProfile", "-Command",
               "Start-Process powercfg -Verb RunAs -Wait -WindowStyle Hidden "
               f"-ArgumentList '/srumutil','/output','\"{ruta}\"','/csv'"], timeout=180)

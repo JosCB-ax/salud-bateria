@@ -1,0 +1,46 @@
+﻿Salud de la batería — Licencia de uso
+© 2026 JosCB. Todos los derechos reservados.
+https://github.com/JosCB-ax/salud-bateria
+
+Este programa y su código fuente son obra de JosCB y están protegidos por la
+Ley de Propiedad Intelectual española y los tratados internacionales.
+
+SE PERMITE, gratis y sin pedir permiso:
+- Descargar, instalar y usar el programa, a título personal o profesional,
+  en todos los equipos que se quiera.
+- Leer el código fuente y compartir el enlace oficial del proyecto.
+
+NO SE PERMITE sin permiso por escrito del autor:
+- Vender el programa o incluirlo en un producto o servicio de pago.
+- Distribuir copias, modificadas o no, fuera del enlace oficial.
+- Quitar, ocultar o cambiar los avisos de autoría y copyright.
+- Presentar el programa, o partes de su código, como obra propia.
+
+El programa se ofrece «tal cual», sin garantía. En la medida en que la ley lo
+permite, el autor no responde de daños derivados de su uso; esto no limita los
+derechos del consumidor ni la responsabilidad por dolo o culpa grave.
+Desarrollado con ayuda de herramientas de inteligencia artificial, bajo la
+dirección y revisión del autor. Rige la ley española.
+
+Incluye software de terceros con sus propias licencias: Python (PSF), Tcl/Tk
+(BSD), psutil (BSD-3), pystray (LGPL-3.0), Pillow (MIT-CMU), ReportLab (BSD)
+y PyInstaller (GPL con excepción para programas empaquetados).
+
+---------------------------------------------------------------------------
+
+Battery Health — Licence
+© 2026 JosCB. All rights reserved.
+
+You MAY, free of charge: download, install and use the program, personally or
+professionally, on any number of computers; read the source code and share the
+official project link.
+
+You MAY NOT, without the author's written permission: sell the program or
+include it in a paid product or service; distribute copies, modified or not,
+outside the official link; remove, hide or change the authorship and copyright
+notices; present the program, or parts of its code, as your own work.
+
+Provided "as is", without warranty, to the extent permitted by law. Developed
+with the help of artificial intelligence tools under the author's direction
+and review. Governed by Spanish law. Third-party components keep their own
+licences (listed above).

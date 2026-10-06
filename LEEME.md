@@ -151,3 +151,10 @@ Las funciones que interpretan la salida de cada sistema (`parse_battery_report_x
 `parse_ioreg`, `leer_linux`, `parse_top_macos`) son puras y están probadas con
 ejemplos reales, así que se puede trabajar en el programa desde cualquier
 sistema sin tener el hardware delante.
+
+## Licencia
+
+© 2026 JosCB. Todos los derechos reservados. Uso gratuito; no se permite venderlo, redistribuir copias
+modificadas ni quitar los avisos de autoría. Condiciones completas en [LICENCIA.txt](LICENCIA.txt);
+privacidad, términos y fuentes, dentro del programa en Ajustes › Información legal.
+Desarrollado con ayuda de herramientas de inteligencia artificial, bajo la dirección y revisión del autor.

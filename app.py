@@ -22,6 +22,7 @@ import actualizaciones  # noqa: E402
 import ahorro  # noqa: E402
 import configuracion  # noqa: E402
 import historial  # noqa: E402
+import legal  # noqa: E402
 import prediccion  # noqa: E402
 from configuracion import recurso  # noqa: E402
 import tema  # noqa: E402
@@ -31,7 +32,7 @@ from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.5.1"
+VERSION = "1.6.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 
@@ -209,7 +210,9 @@ class App(tk.Tk):
         self.nb.add(f, text="Consejos")
 
     def _barra(self):
-        b = ttk.Frame(self, padding=16)
+        ttk.Label(self, text=legal.pie(), foreground=self.p["mut"],
+                  font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 6))
+        b = ttk.Frame(self, padding=(16, 16, 16, 6))
         b.pack(side="bottom", fill="x")
         self.btn_actualizar = ttk.Button(b, text="Actualizar", command=self.actualizar)
         self.btn_actualizar.pack(side="left")
@@ -509,10 +512,36 @@ class App(tk.Tk):
             if (cfg["tema"], cfg["idioma"]) != tema_antes:
                 self._construir()
 
+        ttk.Label(f, text="Información legal", font=("Segoe UI", 11, "bold")).grid(
+            row=12, column=0, sticky="w", pady=(16, 0))
+        leyes = ttk.Frame(f)
+        leyes.grid(row=13, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        for clave, nombre in (("privacidad", "Privacidad"), ("terminos", "Términos de uso"),
+                              ("fuentes", "Fuentes y cookies")):
+            ttk.Button(leyes, text=nombre, command=lambda c=clave: self.ventana_legal(c, v)).pack(
+                side="left", padx=(0, 8))
         botones = ttk.Frame(f)
-        botones.grid(row=12, column=0, columnspan=3, sticky="e", pady=(16, 0))
+        botones.grid(row=14, column=0, columnspan=3, sticky="e", pady=(16, 0))
         ttk.Button(botones, text="Cancelar", command=v.destroy).pack(side="right")
         ttk.Button(botones, text="Guardar", command=aceptar).pack(side="right", padx=8)
+
+    def ventana_legal(self, clave: str, padre=None):
+        titulo, cuerpo = legal.texto(clave)
+        v = tk.Toplevel(padre or self)
+        v.title(titulo)
+        v.transient(padre or self)
+        v.geometry("640x520")
+        f = ttk.Frame(v, padding=12)
+        f.pack(fill="both", expand=True)
+        barra = ttk.Scrollbar(f, orient="vertical")
+        caja = tk.Text(f, wrap="word", relief="flat", highlightthickness=0, padx=10, pady=8, font=("Segoe UI", 10),
+                       bg=self.p["panel"], fg=self.p["fg"], yscrollcommand=barra.set)
+        barra.config(command=caja.yview)
+        barra.pack(side="right", fill="y")
+        caja.pack(side="left", fill="both", expand=True)
+        caja.insert("1.0", f"{cuerpo}\n\n{legal.pie()}")
+        caja.config(state="disabled")
+        ttk.Button(v, text="Cerrar", command=v.destroy).pack(side="right", padx=12, pady=(0, 12))
 
     def _pintar_ahorro(self, detalle: str = ""):
         if ahorro.activo():
@@ -696,15 +725,17 @@ class App(tk.Tk):
                 try:
                     if actualizaciones.instalar(info):
                         self.destroy()
-                except OSError as e:
+                except (OSError, ValueError) as e:
                     messagebox.showerror("Actualizaciones", f"No se pudo descargar:\n{e}")
 
         threading.Thread(target=trabajo, daemon=True).start()
 
     def acerca(self):
-        if messagebox.askyesno("Acerca de", f"Salud de la batería {VERSION}\n\n"
+        if messagebox.askyesno("Acerca de", f"Salud de la batería {VERSION}\n{legal.copyright()}\n\n"
                                "Mide el desgaste real de la batería con los datos que su firmware "
                                "da al sistema operativo, por eso funciona con cualquier marca de portátil.\n\n"
+                               f"{legal.aviso_ia()}\n"
+                               "Privacidad, términos de uso y fuentes: en Ajustes.\n\n"
                                "¿Buscar ahora si hay una versión nueva?"):
             self.buscar_actualizacion(avisar_si_no_hay=True)
 

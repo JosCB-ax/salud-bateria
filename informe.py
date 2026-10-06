@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import platform
+import legal
 
 from idioma import t as tr
 from autonomia import calcular, horas_texto, sin_datos_texto
@@ -179,6 +180,7 @@ ol li{{margin-bottom:8px}} .nota{{color:var(--mut);font-size:13px}}
 {f'<div class="card"><h2>{e(tr("Ajustes de energía"))}</h2><table>' + ajustes + '</table></div>' if ajustes else ''}
 <div class="card"><h2>{e(tr('Consejos para cuidar la batería'))}</h2><ol>{consejos}</ol></div>
 <p class="nota">La salud se calcula como capacidad actual ÷ capacidad de fábrica, según lo que el firmware de la batería informa al sistema. Es igual para cualquier marca de portátil.</p>
+<p class="nota">{e(legal.pie())}</p>
 </main></body></html>"""
 
 

@@ -5,7 +5,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bandeja import decidir_aviso  # noqa: E402
-from actualizaciones import es_mas_nueva  # noqa: E402
+from actualizaciones import _de_github, es_mas_nueva, suma_esperada  # noqa: E402
 from consumo import parse_srum_csv  # noqa: E402
 from prueba import calcular_resultado  # noqa: E402
 
@@ -160,6 +160,23 @@ class TestPrediccion(unittest.TestCase):
         self.assertIsNone(decidir_aviso_temperatura(st, 42, cfg))
         decidir_aviso_temperatura(st, 35, cfg)
         self.assertIsNotNone(decidir_aviso_temperatura(st, 40, cfg))
+
+
+class TestSeguridadActualizaciones(unittest.TestCase):
+    def test_solo_descarga_de_github(self):
+        base = "https://github.com/JosCB-ax/salud-bateria/releases/download/v2.0.0/"
+        self.assertTrue(_de_github(base + "SaludBateria-Setup-2.0.0.exe"))
+        self.assertFalse(_de_github("http://github.com/JosCB-ax/salud-bateria/releases/download/v2/x.exe"))
+        self.assertFalse(_de_github("https://github.com.malo.net/JosCB-ax/salud-bateria/releases/download/x.exe"))
+        self.assertFalse(_de_github("https://github.com/otro/repo/releases/download/v1/x.exe"))
+        self.assertFalse(_de_github(None))
+
+    def test_suma_del_archivo(self):
+        h = "a" * 64
+        sumas = f"{h}  SaludBateria-Setup-2.0.0.exe\n{'b' * 64}  otro.dmg\n"
+        self.assertEqual(suma_esperada(sumas, "SaludBateria-Setup-2.0.0.exe"), h)
+        self.assertIsNone(suma_esperada(sumas, "falta.exe"))
+        self.assertIsNone(suma_esperada("xyz  SaludBateria-Setup-2.0.0.exe", "SaludBateria-Setup-2.0.0.exe"))
 
 
 if __name__ == "__main__":

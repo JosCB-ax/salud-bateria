@@ -75,7 +75,7 @@ jobs:
           python -m PyInstaller --noconfirm --clean --windowed --name SaludBateria \
             --icon icono.ico --add-data "icono.ico:." --hidden-import pystray._darwin \
             --osx-bundle-identifier com.saludbateria.app app.py
-          mkdir dmg && cp -R dist/SaludBateria.app dmg/ && ln -s /Applications dmg/Aplicaciones
+          mkdir dmg && cp -R dist/SaludBateria.app LICENCIA.txt dmg/ && ln -s /Applications dmg/Aplicaciones
           hdiutil create -volname "Salud de la bateria" -srcfolder dmg -format UDZO \
             "SaludBateria-$v-macOS-${{ matrix.chip }}.dmg"
       - uses: actions/upload-artifact@v4
@@ -101,7 +101,7 @@ jobs:
             --add-data "icono.ico:." --hidden-import pystray._xorg --exclude-module gi app.py
           d="SaludBateria-$v-Linux"
           mkdir "$d"
-          cp dist/SaludBateria empaquetado/instalar-linux.sh empaquetado/desinstalar-linux.sh "$d/"
+          cp dist/SaludBateria LICENCIA.txt empaquetado/instalar-linux.sh empaquetado/desinstalar-linux.sh "$d/"
           python -c "from PIL import Image; Image.open('icono.ico').save('$d/icono.png')"
           tar czf "$d.tar.gz" "$d"
       - uses: actions/upload-artifact@v4
@@ -120,6 +120,8 @@ jobs:
         with:
           path: paquetes
           merge-multiple: true
+      - name: Huellas SHA-256 (el programa las comprueba antes de instalar una actualización)
+        run: cd paquetes && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:

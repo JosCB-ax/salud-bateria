@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from xml.sax.saxutils import escape
+
+import legal
 import prediccion
 from idioma import t as tr
 from informe import COLORES, _autonomia_lineas, _filas
@@ -39,7 +42,7 @@ def exportar_pdf(r: dict, ruta: str) -> None:
         hist.append(Paragraph(f'<font color="{color}" size="20"><b>{salud}</b></font>'
                               f'&nbsp;&nbsp;<font color="{color}"><b>{tr(nivel).upper()}</b></font>', grande))
         hist.append(Spacer(1, 4))
-        hist.append(Paragraph(tr(diag), p))
+        hist.append(Paragraph(escape(tr(diag)), p))
         filas = [[k, v] for k, v in _filas(b) if v != "—"]
         t = Table(filas, colWidths=[ancho * 0.45, ancho * 0.55])
         t.setStyle(tabla_estilo)
@@ -79,8 +82,10 @@ def exportar_pdf(r: dict, ruta: str) -> None:
         hist.append(t)
 
     hist.append(Paragraph(tr("Consejos"), h2))
-    hist.append(ListFlowable([Paragraph(tr(c), p) for c in r["consejos"]], bulletType="1"))
+    hist.append(ListFlowable([Paragraph(escape(tr(c)), p) for c in r["consejos"]], bulletType="1"))
+
+    hist += [Spacer(1, 18), Paragraph(f'<font size="8" color="#888888">{escape(legal.pie())}</font>', p)]
 
     SimpleDocTemplate(ruta, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
                       topMargin=1.8 * cm, bottomMargin=1.8 * cm,
-                      title=tr("Salud de la batería")).build(hist)
+                      title=tr("Salud de la batería"), author=legal.AUTOR).build(hist)

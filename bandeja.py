@@ -59,8 +59,10 @@ def notificar(icono, mensaje: str) -> None:
     so = platform.system()
     titulo = tr("Salud de la batería")
     if so == "Darwin":
-        texto = mensaje.replace('"', "'")
-        ejecutar(["osascript", "-e", f'display notification "{texto}" with title "{titulo}"'])
+        # el texto va como argumento, nunca dentro del código AppleScript
+        ejecutar(["osascript", "-e", "on run argv", "-e",
+                  "display notification (item 1 of argv) with title (item 2 of argv)",
+                  "-e", "end run", mensaje, titulo])
     elif so == "Linux" and ejecutar(["which", "notify-send"]).strip():
         ejecutar(["notify-send", titulo, mensaje])
     else:

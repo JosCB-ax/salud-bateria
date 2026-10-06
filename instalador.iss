@@ -2,7 +2,7 @@
 ; Lo compila construir_instalador.bat a partir de dist\SaludBateria.
 
 #define Nombre "Salud de la batería"
-#define Version "1.5.1"
+#define Version "1.6.0"
 #define Exe "SaludBateria.exe"
 
 [Setup]
@@ -10,7 +10,9 @@ AppId={{7E3B9C1A-4F2D-4B8E-9A61-5C0D2E7F8B34}
 AppName={#Nombre}
 AppVersion={#Version}
 AppVerName={#Nombre} {#Version}
-AppPublisher=Joseba
+AppPublisher=JosCB
+AppCopyright=© 2026 JosCB. Todos los derechos reservados.
+LicenseFile=LICENCIA.txt
 DefaultDirName={autopf}\Salud de la bateria
 DefaultGroupName={#Nombre}
 DisableProgramGroupPage=yes
@@ -44,6 +46,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Files]
 Source: "dist\SaludBateria\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "LICENCIA.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#Nombre}"; Filename: "{app}\{#Exe}"

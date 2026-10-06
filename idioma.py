@@ -94,6 +94,11 @@ EN = {
     "Automático (como el sistema)": "Automatic (like the system)", "Claro": "Light", "Oscuro": "Dark",
     "Buscar versiones nuevas al abrir el programa": "Check for new versions when opening the program",
     "Guardar": "Save", "Cancelar": "Cancel", "Cerrar": "Close", "Empezar": "Start",
+    "Información legal": "Legal information", "Privacidad": "Privacy", "Términos de uso": "Terms of use",
+    "Fuentes y cookies": "Sources and cookies",
+    "Privacidad, términos de uso y fuentes: en Ajustes.": "Privacy, terms of use and sources: in Settings.",
+    "El instalador descargado no coincide con el publicado. No se ha instalado nada.":
+        "The downloaded installer does not match the published one. Nothing has been installed.",
     "Los porcentajes deben ser números.": "Percentages must be numbers.",
     "El aviso para enchufar debe ser menor que el de desenchufar.":
         "The plug-in alert must be lower than the unplug alert.",
