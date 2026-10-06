@@ -97,7 +97,8 @@ EN = {
     "Información legal": "Legal information", "Privacidad": "Privacy", "Términos de uso": "Terms of use",
     "Fuentes y cookies": "Sources and cookies",
     "Abrir el manual en PDF": "Open the manual as PDF",
-    "Pulsa un apartado del índice para ir a él.": "Click a section in the index to jump to it (the manual is in Spanish).",
+    "Índice": "Contents",
+    "Pulsa un apartado del índice para ir a él.": "Click a section in the index to jump to it.",
     "Privacidad, términos de uso y fuentes: en Ajustes.": "Privacy, terms of use and sources: in Settings.",
     "El instalador descargado no coincide con el publicado. No se ha instalado nada.":
         "The downloaded installer does not match the published one. Nothing has been installed.",

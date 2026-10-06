@@ -44,7 +44,7 @@ Para sacar una versión nueva, cambia el número en `instalador.iss`,
 
 ## Manual
 
-El manual de usuario en PDF (instalación en Windows, macOS y Linux y explicación de cada función, con
+El manual de usuario en PDF (en español y en inglés; instalación en Windows, macOS y Linux y explicación de cada función, con
 índice que se puede pulsar) está en cada versión de [Releases](https://github.com/JosCB-ax/salud-bateria/releases/latest)
 y dentro del programa, en la pestaña «Manual».
 

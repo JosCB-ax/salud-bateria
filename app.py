@@ -33,7 +33,7 @@ from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 
@@ -226,7 +226,7 @@ class App(tk.Tk):
         caja.tag_configure("titulo", font=("Segoe UI", 13, "bold"), foreground=self.p["acc"], spacing1=14, spacing3=6)
         caja.tag_configure("indice", foreground=self.p["acc"], underline=True, spacing1=2)
         secciones = manual.texto_plano()
-        caja.insert("end", "Índice\n", "titulo")
+        caja.insert("end", tr("Índice") + "\n", "titulo")
         for clave, titulo, _ in secciones:
             caja.insert("end", titulo + "\n", ("indice", "ir_" + clave))
             caja.tag_bind("ir_" + clave, "<Button-1>", lambda _e, c=clave: caja.yview(c))
