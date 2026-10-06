@@ -11,19 +11,23 @@ import sys
 import platform
 import subprocess
 import threading
+import time
 import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import actualizaciones  # noqa: E402
 import configuracion  # noqa: E402
+import historial  # noqa: E402
 from configuracion import recurso  # noqa: E402
+import tema  # noqa: E402
 from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 
@@ -41,27 +45,34 @@ class App(tk.Tk):
         except tk.TclError:
             pass
 
-        estilo = ttk.Style(self)
-        if "vista" in estilo.theme_names():
-            estilo.theme_use("vista")
-        estilo.configure("Treeview", rowheight=26)
-        estilo.configure("Titulo.TLabel", font=("Segoe UI", 16, "bold"))
-        estilo.configure("Diag.TLabel", font=("Segoe UI", 11))
-
-        self._cabecera()
-        self._barra()  # antes que las pestañas, para que siempre quede visible abajo
-        self._pestanas()
+        self._construir()
         self.after(100, self.actualizar)
         if not demo and configuracion.cargar().get("avisos"):
             iniciar_bandeja()
+        if not demo:
+            self.after(3000, self.buscar_actualizacion)
 
     # ------------------------------------------------------------ interfaz
+
+    def _construir(self):
+        """Crea toda la interfaz con el tema elegido (se repite al cambiar de tema)."""
+        for w in self.winfo_children():
+            w.destroy()
+        self.p = tema.aplicar(self, tema.elegir(configuracion.cargar().get("tema", "automatico")))
+        estilo = ttk.Style(self)
+        estilo.configure("Titulo.TLabel", font=("Segoe UI", 16, "bold"))
+        estilo.configure("Diag.TLabel", font=("Segoe UI", 11))
+        self._cabecera()
+        self._barra()  # antes que las pestañas, para que siempre quede visible abajo
+        self._pestanas()
+        if self.resultado:
+            self._mostrar(self.resultado)
 
     def _cabecera(self):
         top = ttk.Frame(self, padding=(16, 16, 16, 8))
         top.pack(fill="x")
         self.lienzo = tk.Canvas(top, width=140, height=140, highlightthickness=0,
-                                bg=self.cget("bg"))
+                                bg=self.p["bg"])
         self.lienzo.pack(side="left")
         texto = ttk.Frame(top, padding=(16, 8, 0, 0))
         texto.pack(side="left", fill="both", expand=True)
@@ -69,8 +80,10 @@ class App(tk.Tk):
         self.lbl_titulo.pack(anchor="w")
         self.lbl_diag = ttk.Label(texto, text="", style="Diag.TLabel", wraplength=640, justify="left")
         self.lbl_diag.pack(anchor="w", pady=(6, 0))
-        self.lbl_resumen = ttk.Label(texto, text="", foreground="#666", wraplength=640, justify="left")
+        self.lbl_resumen = ttk.Label(texto, text="", foreground=self.p["mut"], wraplength=640, justify="left")
         self.lbl_resumen.pack(anchor="w", pady=(8, 0))
+        self.lbl_estado = ttk.Label(texto, text="", foreground=self.p["mut"], font=("Segoe UI", 9))
+        self.lbl_estado.pack(anchor="w", pady=(4, 0))
         self._dibujar_indicador(None, "desconocida")
 
     def _pestanas(self):
@@ -94,8 +107,8 @@ class App(tk.Tk):
         self.lbl_autonomia = ttk.Label(f, text="", wraplength=840, justify="left", font=("Segoe UI", 11))
         self.lbl_autonomia.pack(anchor="w", pady=(6, 12))
         ttk.Label(f, text="Evolución de la salud", font=("Segoe UI", 12, "bold")).pack(anchor="w")
-        self.grafica = tk.Canvas(f, height=220, bg="white", highlightthickness=1,
-                                 highlightbackground="#e4e6ea")
+        self.grafica = tk.Canvas(f, height=220, bg=self.p["panel"], highlightthickness=1,
+                                 highlightbackground=self.p["linea"])
         self.grafica.pack(fill="both", expand=True, pady=(6, 0))
         self.grafica.bind("<Configure>", lambda _e: self._dibujar_historial())
         self.nb.add(f, text="Autonomía e historial")
@@ -111,7 +124,7 @@ class App(tk.Tk):
         self.tabla_proc.pack(fill="both", expand=True)
         self.tabla_proc.bind("<<TreeviewSelect>>", self._consejo_proceso)
         self.lbl_consejo_proc = ttk.Label(f, text="Selecciona un programa para ver cómo reducir su consumo.",
-                                          wraplength=820, justify="left", foreground="#555")
+                                          wraplength=820, justify="left", foreground=self.p["mut"])
         self.lbl_consejo_proc.pack(anchor="w", pady=(8, 0))
         if platform.system() == "Windows":
             fila = ttk.Frame(f)
@@ -119,7 +132,7 @@ class App(tk.Tk):
             self.btn_exacto = ttk.Button(fila, text="Medir consumo exacto (24 h)…", command=self.consumo_exacto)
             self.btn_exacto.pack(side="left")
             self.lbl_exacto = ttk.Label(fila, text="Usa el registro de energía de Windows; pide permiso de administrador.",
-                                        foreground="#666", wraplength=600, justify="left")
+                                        foreground=self.p["mut"], wraplength=600, justify="left")
             self.lbl_exacto.pack(side="left", padx=10)
         self.lbl_ajustes = ttk.Label(f, text="", wraplength=820, justify="left")
         self.lbl_ajustes.pack(anchor="w", pady=(8, 0))
@@ -128,7 +141,7 @@ class App(tk.Tk):
         # Consejos
         f = ttk.Frame(self.nb, padding=8)
         self.txt_consejos = tk.Text(f, wrap="word", relief="flat", font=("Segoe UI", 11),
-                                    padx=8, pady=8, cursor="arrow")
+                                    padx=8, pady=8, cursor="arrow", bg=self.p["panel"], fg=self.p["fg"])
         sb = ttk.Scrollbar(f, command=self.txt_consejos.yview)
         self.txt_consejos.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
@@ -144,20 +157,19 @@ class App(tk.Tk):
         ttk.Button(b, text="Guardar informe…", command=self.guardar).pack(side="left", padx=8)
         ttk.Button(b, text="Ajustes", command=self.ajustes).pack(side="right", padx=(0, 8))
         ttk.Button(b, text="Acerca de", command=self.acerca).pack(side="right")
-        self.lbl_estado = ttk.Label(b, text="", foreground="#666")
-        self.lbl_estado.pack(side="left", padx=12)
+        ttk.Button(b, text="Prueba de autonomía…", command=self.prueba_autonomia).pack(side="right", padx=(0, 8))
 
     def _dibujar_indicador(self, salud, nivel):
         c = self.lienzo
         c.delete("all")
         color = COLORES[nivel]
-        c.create_oval(10, 10, 130, 130, outline="#e4e6ea", width=14)
+        c.create_oval(10, 10, 130, 130, outline=self.p["linea"], width=14)
         if salud:
             c.create_arc(10, 10, 130, 130, start=90, extent=-3.6 * min(salud, 100),
                          style="arc", outline=color, width=14)
         c.create_text(70, 62, text=f"{salud:.0f} %" if salud is not None else "?",
                       font=("Segoe UI", 22, "bold"), fill=color)
-        c.create_text(70, 90, text="salud", font=("Segoe UI", 10), fill="#666")
+        c.create_text(70, 90, text="salud", font=("Segoe UI", 10), fill=self.p["mut"])
 
     # ------------------------------------------------------------- acciones
 
@@ -237,10 +249,7 @@ class App(tk.Tk):
             self.lbl_autonomia.config(text="No hay batería.")
             return
         escenarios = calcular(b)
-        if not escenarios:
-            self.lbl_autonomia.config(text=sin_datos_texto(b))
-            return
-        lineas = []
+        lineas = [] if escenarios else [sin_datos_texto(b)]
         for e in escenarios:
             lineas.append(f"{e.titulo} ({e.vatios:.1f} W, {e.detalle}):")
             linea = f"    Carga completa hoy: {horas_texto(e.horas_hoy)}"
@@ -249,7 +258,15 @@ class App(tk.Tk):
             if e.horas_carga_actual and not b.enchufado:
                 linea += f"   ·   con la carga actual: {horas_texto(e.horas_carga_actual)}"
             lineas.append(linea)
-        if escenarios[0].horas_nueva:
+        try:
+            pruebas = historial.cargar()["pruebas"]
+        except OSError:
+            pruebas = []
+        if pruebas:
+            u = pruebas[-1]
+            lineas.append(f"Última prueba guiada ({u['fecha']}, uso {u.get('uso', 'ligero')}): "
+                          f"{u['vatios']} W, carga completa {horas_texto(u['horas_hoy'])}.")
+        if escenarios and escenarios[0].horas_nueva:
             perdido = escenarios[0].horas_nueva - escenarios[0].horas_hoy
             lineas.append(f"\nEl desgaste te cuesta {horas_texto(perdido)} de autonomía por carga.")
         self.lbl_autonomia.config(text="\n".join(lineas))
@@ -261,7 +278,7 @@ class App(tk.Tk):
         datos = b.historial if b else []
         w, h = c.winfo_width(), c.winfo_height()
         if len(datos) < 2:
-            c.create_text(w / 2, h / 2, fill="#888", font=("Segoe UI", 10), text=(
+            c.create_text(w / 2, h / 2, fill=self.p["mut"], font=("Segoe UI", 10), text=(
                 "Windows aún no tiene historial suficiente de esta batería." if b else ""))
             return
         izq, der, arr, abj = 48, 16, 14, 28
@@ -271,18 +288,18 @@ class App(tk.Tk):
         x = lambda i: izq + (w - izq - der) * i / (len(datos) - 1)  # noqa: E731
         y = lambda v: arr + (h - arr - abj) * (y_max - v) / (y_max - y_min)  # noqa: E731
         for v in range(y_min, y_max + 1, 10):
-            c.create_line(izq, y(v), w - der, y(v), fill="#eef0f3")
-            c.create_text(izq - 6, y(v), text=f"{v} %", anchor="e", fill="#888", font=("Segoe UI", 8))
+            c.create_line(izq, y(v), w - der, y(v), fill=self.p["rejilla"])
+            c.create_text(izq - 6, y(v), text=f"{v} %", anchor="e", fill=self.p["mut"], font=("Segoe UI", 8))
         c.create_line(izq, y(80), w - der, y(80), fill="#e6a100", dash=(4, 3))
         c.create_text(izq + 6, y(80) + 8, text="80 %: límite de desgaste normal", anchor="w",
                       fill="#e6a100", font=("Segoe UI", 8))
         puntos = [(x(i), y(v)) for i, (_, v) in enumerate(datos)]
-        c.create_line(*[p for xy in puntos for p in xy], fill="#2f6fed", width=2)
+        c.create_line(*[p for xy in puntos for p in xy], fill=self.p["acc"], width=2)
         for px, py in (puntos[0], puntos[-1]):
-            c.create_oval(px - 3, py - 3, px + 3, py + 3, fill="#2f6fed", outline="")
-        c.create_text(izq, h - 10, text=datos[0][0], anchor="w", fill="#666", font=("Segoe UI", 8))
+            c.create_oval(px - 3, py - 3, px + 3, py + 3, fill=self.p["acc"], outline="")
+        c.create_text(izq, h - 10, text=datos[0][0], anchor="w", fill=self.p["mut"], font=("Segoe UI", 8))
         c.create_text(w - der, h - 10, text=f"{datos[-1][0]}  ·  {datos[-1][1]:.0f} %",
-                      anchor="e", fill="#666", font=("Segoe UI", 8))
+                      anchor="e", fill=self.p["mut"], font=("Segoe UI", 8))
 
     def _consejo_proceso(self, _evento):
         sel = self.tabla_proc.selection()
@@ -339,7 +356,7 @@ class App(tk.Tk):
             else:
                 texto = "Energía gastada en las últimas 24 h:  " + "   ·   ".join(
                     f"{n} {pc:.0f} %" for n, pc in datos[:8])
-            self.lbl_exacto.config(text=texto, foreground="#1d2330")
+            self.lbl_exacto.config(text=texto, foreground=self.p["fg"])
 
         threading.Thread(target=trabajo, daemon=True).start()
 
@@ -351,21 +368,42 @@ class App(tk.Tk):
         v.transient(self)
         f = ttk.Frame(v, padding=16)
         f.pack()
+        rec = configuracion.POR_DEFECTO
         avisos = tk.BooleanVar(value=cfg["avisos"])
         alto = tk.IntVar(value=cfg["umbral_alto"])
         bajo = tk.IntVar(value=cfg["umbral_bajo"])
+        temas = {"automatico": "Automático (como el sistema)", "claro": "Claro", "oscuro": "Oscuro"}
+        tema_var = tk.StringVar(value=temas.get(cfg.get("tema", "automatico"), temas["automatico"]))
         try:
             arranque = tk.BooleanVar(value=configuracion.arranque_activado())
         except OSError:
             arranque = tk.BooleanVar(value=False)
+        buscar_act = tk.BooleanVar(value=cfg.get("buscar_actualizaciones", True))
+
+        ttk.Label(f, text="Avisos de carga", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Checkbutton(f, text="Avisarme desde la bandeja del sistema", variable=avisos).grid(
-            row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(f, text="Avisar para desenchufar al llegar a (%):").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Spinbox(f, from_=50, to=100, increment=5, textvariable=alto, width=5).grid(row=1, column=1, pady=(8, 0))
-        ttk.Label(f, text="Avisar para enchufar al bajar de (%):").grid(row=2, column=0, sticky="w", pady=(4, 0))
-        ttk.Spinbox(f, from_=5, to=50, increment=5, textvariable=bajo, width=5).grid(row=2, column=1, pady=(4, 0))
+            row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Label(f, text="Avisar para desenchufar al llegar a:").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Spinbox(f, from_=50, to=100, increment=5, textvariable=alto, width=5).grid(row=2, column=1, pady=(8, 0))
+        ttk.Label(f, text=f"%  (recomendado: {rec['umbral_alto']})", foreground=self.p["mut"]).grid(
+            row=2, column=2, sticky="w", pady=(8, 0))
+        ttk.Label(f, text="Avisar para enchufar al bajar de:").grid(row=3, column=0, sticky="w", pady=(4, 0))
+        ttk.Spinbox(f, from_=5, to=50, increment=5, textvariable=bajo, width=5).grid(row=3, column=1, pady=(4, 0))
+        ttk.Label(f, text=f"%  (recomendado: {rec['umbral_bajo']})", foreground=self.p["mut"]).grid(
+            row=3, column=2, sticky="w", pady=(4, 0))
+        ttk.Button(f, text="Restaurar recomendados",
+                   command=lambda: (alto.set(rec["umbral_alto"]), bajo.set(rec["umbral_bajo"]))).grid(
+            row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(f, text="Iniciar con el ordenador (solo el icono de la bandeja)", variable=arranque).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(12, 0))
+            row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+        ttk.Label(f, text="Aspecto y actualizaciones", font=("Segoe UI", 11, "bold")).grid(
+            row=6, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(f, text="Tema:").grid(row=7, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(f, textvariable=tema_var, values=list(temas.values()), state="readonly", width=28).grid(
+            row=7, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Checkbutton(f, text="Buscar versiones nuevas al abrir el programa", variable=buscar_act).grid(
+            row=8, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         def aceptar():
             try:
@@ -373,10 +411,13 @@ class App(tk.Tk):
             except (tk.TclError, ValueError):
                 messagebox.showerror("Ajustes", "Los porcentajes deben ser números.", parent=v)
                 return
-            if cfg["umbral_bajo"] >= cfg["umbral_alto"]:
+            if not (0 < cfg["umbral_bajo"] < cfg["umbral_alto"] <= 100):
                 messagebox.showerror("Ajustes", "El aviso para enchufar debe ser menor que el de desenchufar.",
                                      parent=v)
                 return
+            tema_antes = cfg.get("tema", "automatico")
+            cfg["tema"] = next(k for k, t in temas.items() if t == tema_var.get())
+            cfg["buscar_actualizaciones"] = buscar_act.get()
             configuracion.guardar(cfg)
             try:
                 configuracion.fijar_arranque(arranque.get())
@@ -385,16 +426,124 @@ class App(tk.Tk):
             if cfg["avisos"]:
                 iniciar_bandeja()
             v.destroy()
+            if cfg["tema"] != tema_antes:
+                self._construir()
 
         botones = ttk.Frame(f)
-        botones.grid(row=4, column=0, columnspan=2, sticky="e", pady=(16, 0))
+        botones.grid(row=9, column=0, columnspan=3, sticky="e", pady=(16, 0))
         ttk.Button(botones, text="Cancelar", command=v.destroy).pack(side="right")
         ttk.Button(botones, text="Guardar", command=aceptar).pack(side="right", padx=8)
 
+    def prueba_autonomia(self):
+        import prueba
+        b = self.resultado["baterias"][0] if self.resultado and self.resultado["baterias"] else None
+        v = tk.Toplevel(self)
+        v.title("Prueba de autonomía")
+        v.resizable(False, False)
+        v.transient(self)
+        f = ttk.Frame(v, padding=16)
+        f.pack()
+        ttk.Label(f, wraplength=460, justify="left", text=(
+            "Mide cuánto dura tu batería con un uso fijo. Antes de empezar: desenchufa el cargador, "
+            "pon el brillo de la pantalla al 50 % y cierra los programas que no necesites. "
+            "No toques el portátil hasta que termine.")).grid(row=0, column=0, columnspan=3, sticky="w")
+        minutos = tk.IntVar(value=prueba.DURACION_RECOMENDADA)
+        ttk.Label(f, text="Duración:").grid(row=1, column=0, sticky="w", pady=(12, 0))
+        ttk.Spinbox(f, from_=5, to=180, increment=5, textvariable=minutos, width=5).grid(
+            row=1, column=1, sticky="w", pady=(12, 0))
+        ttk.Label(f, text=f"minutos  (recomendado: {prueba.DURACION_RECOMENDADA}; más tiempo, más precisión)",
+                  foreground=self.p["mut"]).grid(row=1, column=2, sticky="w", pady=(12, 0))
+        carga = tk.StringVar(value=prueba.CARGAS["ligera"])
+        ttk.Label(f, text="Tipo de uso:").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(f, textvariable=carga, values=list(prueba.CARGAS.values()), state="readonly",
+                     width=58).grid(row=2, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        barra = ttk.Progressbar(f, length=460, mode="determinate")
+        barra.grid(row=3, column=0, columnspan=3, pady=(14, 0))
+        estado = ttk.Label(f, text="", wraplength=460, justify="left")
+        estado.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        botones = ttk.Frame(f)
+        botones.grid(row=5, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        cancelar = threading.Event()
+        btn_empezar = ttk.Button(botones, text="Empezar")
+        btn_empezar.pack(side="right")
+        ttk.Button(botones, text="Cerrar", command=lambda: (cancelar.set(), v.destroy())).pack(side="right", padx=8)
+
+        def empezar():
+            try:
+                total = int(minutos.get()) * 60
+                if total < 300:
+                    raise ValueError
+            except (tk.TclError, ValueError):
+                messagebox.showerror("Prueba de autonomía", "La duración mínima es de 5 minutos.", parent=v)
+                return
+            clave = next(k for k, t in prueba.CARGAS.items() if t == carga.get())
+            btn_empezar.state(["disabled"])
+            barra.configure(maximum=total, value=0)
+
+            def progreso(restante):
+                self.after(0, lambda: v.winfo_exists() and (
+                    barra.configure(value=total - restante),
+                    estado.config(text=f"Midiendo… quedan {int(restante // 60)} min {int(restante % 60):02d} s")))
+
+            def trabajo():
+                try:
+                    r = prueba.ejecutar_prueba(total / 60, clave, b.capacidad_actual_mwh if b else None,
+                                               b.capacidad_diseno_mwh if b else None, progreso, cancelar)
+                    try:
+                        historial.registrar_prueba(dict(r, uso=clave))
+                    except OSError:
+                        pass
+                    texto = (f"Resultado: consume {r['vatios']} W con este uso. Una carga completa dura "
+                             f"{horas_texto(r['horas_hoy'])}")
+                    if r["horas_nueva"]:
+                        texto += f" (cuando era nueva: {horas_texto(r['horas_nueva'])})"
+                    texto += f". Precisión de la medida: {r['precision']}."
+                except ValueError as e:
+                    texto = str(e)
+                self.after(0, lambda: v.winfo_exists() and (
+                    estado.config(text=texto), btn_empezar.state(["!disabled"])))
+
+            threading.Thread(target=trabajo, daemon=True).start()
+
+        btn_empezar.configure(command=empezar)
+
+    def buscar_actualizacion(self, avisar_si_no_hay: bool = False):
+        cfg = configuracion.cargar()
+        if not avisar_si_no_hay and (not cfg.get("buscar_actualizaciones", True)
+                                     or not actualizaciones.toca_buscar(cfg)):
+            return
+
+        def trabajo():
+            info = actualizaciones.buscar(VERSION)
+            cfg["ultima_busqueda"] = time.time()
+            try:
+                configuracion.guardar(cfg)
+            except OSError:
+                pass
+            self.after(0, ofrecer, info)
+
+        def ofrecer(info):
+            if not info:
+                if avisar_si_no_hay:
+                    messagebox.showinfo("Actualizaciones", f"Tienes la última versión ({VERSION}).")
+                return
+            if messagebox.askyesno("Actualización disponible",
+                                   f"Hay una versión nueva: {info['version']} (tienes la {VERSION}).\n\n"
+                                   "¿Descargarla e instalarla ahora?"):
+                try:
+                    if actualizaciones.instalar(info):
+                        self.destroy()
+                except OSError as e:
+                    messagebox.showerror("Actualizaciones", f"No se pudo descargar:\n{e}")
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
     def acerca(self):
-        messagebox.showinfo("Acerca de", f"Salud de la batería {VERSION}\n\n"
-                            "Mide el desgaste real de la batería con los datos que su firmware "
-                            "da al sistema operativo, por eso funciona con cualquier marca de portátil.")
+        if messagebox.askyesno("Acerca de", f"Salud de la batería {VERSION}\n\n"
+                               "Mide el desgaste real de la batería con los datos que su firmware "
+                               "da al sistema operativo, por eso funciona con cualquier marca de portátil.\n\n"
+                               "¿Buscar ahora si hay una versión nueva?"):
+            self.buscar_actualizacion(avisar_si_no_hay=True)
 
 
 def iniciar_bandeja():
@@ -407,6 +556,8 @@ def iniciar_bandeja():
 
 
 def main():
+    import multiprocessing
+    multiprocessing.freeze_support()  # la prueba de autonomía usa procesos dentro del .exe
     if "--bandeja" in sys.argv:
         import bandeja
         bandeja.main()

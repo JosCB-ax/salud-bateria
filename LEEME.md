@@ -94,6 +94,13 @@ administrador: `powercfg` necesita permisos para escribir el informe.
   con el ordenador (Windows, macOS y Linux).
 - **Consumo exacto por programa** (Windows): reparto de la energía de las
   últimas 24 h según el registro de Windows; pide permiso de administrador.
+- **Prueba de autonomía guiada**: mide durante 20 minutos (o el tiempo que
+  elijas) cuánto gasta el portátil con un uso fijo: ligero, medio o intenso.
+- **Historial propio**: el programa guarda la salud cada día y el consumo real
+  con batería, así la gráfica y la autonomía funcionan también en Mac y Linux.
+- **Modo oscuro**: automático según el sistema, o fijo claro u oscuro en Ajustes.
+- **Actualizaciones**: al abrirse busca versiones nuevas en GitHub (una vez al
+  día) y se ofrece a instalarlas.
 - **Exportar a PDF**: el informe completo con la gráfica.
 - **Ajustes de energía**: plan de energía, brillo, modo de bajo consumo.
 
@@ -109,6 +116,10 @@ administrador: `powercfg` necesita permisos para escribir el informe.
 | `bandeja.py` | icono de la bandeja y avisos de carga |
 | `configuracion.py` | ajustes del usuario e inicio automático |
 | `pdf.py` | exportación a PDF |
+| `historial.py` | historial propio de salud, consumo y pruebas |
+| `prueba.py` | prueba de autonomía guiada |
+| `tema.py` | tema claro u oscuro |
+| `actualizaciones.py` | búsqueda e instalación de versiones nuevas |
 | `consejos.py` | diagnóstico y consejos a partir de lo medido |
 | `informe.py` | informe HTML y salida de texto |
 | `construir_instalador.bat` | crea el instalador de Windows |

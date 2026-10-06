@@ -19,6 +19,7 @@ import webbrowser
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import historial  # noqa: E402
 from consejos import consejos, diagnostico  # noqa: E402
 from consumo import Proceso, ajustes_energia, consejo_programa, procesos_que_mas_consumen  # noqa: E402
 from informe import ahora, html_informe, texto  # noqa: E402
@@ -44,6 +45,12 @@ def analizar(segundos: float, demo: bool) -> dict:
         baterias, procesos, ajustes = datos_demo()
     else:
         baterias = leer_baterias()
+        if baterias:
+            try:
+                historial.registrar(baterias[0])
+                historial.completar(baterias[0])
+            except OSError:
+                pass
         try:
             procesos = procesos_que_mas_consumen(segundos)
         except ImportError:

@@ -5,7 +5,9 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bandeja import decidir_aviso  # noqa: E402
+from actualizaciones import es_mas_nueva  # noqa: E402
 from consumo import parse_srum_csv  # noqa: E402
+from prueba import calcular_resultado  # noqa: E402
 
 SRUM = """AppId,UserId,TimeStamp,TotalEnergyConsumption,CPUEnergyConsumption
 \\Device\\HarddiskVolume3\\Program Files\\Google\\Chrome\\Application\\chrome.exe,S-1-5,2026-10-06 10:00:00,300,200
@@ -50,9 +52,62 @@ class TestArranqueLinux(unittest.TestCase):
         configuracion.DESKTOP = ruta
         configuracion.fijar_arranque(True)
         self.assertTrue(configuracion.arranque_activado())
-        self.assertIn("--bandeja", open(ruta).read())
+        with open(ruta) as f:
+            self.assertIn("--bandeja", f.read())
         configuracion.fijar_arranque(False)
         self.assertFalse(configuracion.arranque_activado())
+
+
+class TestPrueba(unittest.TestCase):
+    def test_con_energia_en_mwh(self):
+        r = calcular_resultado({"porcentaje": 90, "carga_mwh": 45000}, {"porcentaje": 84, "carga_mwh": 42000},
+                               1200, 50000, 57000)
+        self.assertEqual(r["vatios"], 9.0)          # 3 Wh en 20 min
+        self.assertAlmostEqual(r["horas_hoy"], 5.56, places=2)
+        self.assertAlmostEqual(r["horas_nueva"], 6.33, places=2)
+        self.assertEqual(r["precision"], "alta")
+
+    def test_solo_porcentaje(self):
+        r = calcular_resultado({"porcentaje": 90}, {"porcentaje": 84}, 1200, 50000, None)
+        self.assertEqual(r["vatios"], 9.0)
+        self.assertEqual(r["precision"], "media")
+
+    def test_sin_bajada(self):
+        with self.assertRaises(ValueError):
+            calcular_resultado({"porcentaje": 90}, {"porcentaje": 90}, 600, 50000, None)
+
+
+class TestHistorialPropio(unittest.TestCase):
+    def test_registra_y_completa(self):
+        import datetime as dt
+        import tempfile
+        import configuracion
+        import historial
+        from lectores import Bateria
+        carpeta = tempfile.mkdtemp()
+        original = configuracion.carpeta
+        configuracion.carpeta = lambda: carpeta
+        self.addCleanup(setattr, configuracion, "carpeta", original)
+        t = dt.datetime(2026, 10, 6, 10, 0)
+        for dia, cap in ((1, 50000), (2, 49900)):
+            historial.registrar(Bateria(capacidad_diseno_mwh=57000, capacidad_actual_mwh=cap, enchufado=True),
+                                t + dt.timedelta(days=dia))
+        historial.registrar(Bateria(capacidad_diseno_mwh=57000, capacidad_actual_mwh=49800, enchufado=True),
+                            t + dt.timedelta(days=2, hours=3))  # mismo día: sustituye
+        for m in range(6):
+            historial.registrar(Bateria(enchufado=False, potencia_w=8 + m), t + dt.timedelta(minutes=10 * m))
+        b = Bateria(capacidad_diseno_mwh=57000, capacidad_actual_mwh=49800)
+        historial.completar(b, t + dt.timedelta(days=3))
+        self.assertEqual([f for f, _ in b.historial], ["2026-10-07", "2026-10-08"])
+        self.assertEqual(b.historial[-1][1], round(100 * 49800 / 57000, 1))
+        self.assertEqual(b.consumo_medio_w, 10.5)
+        self.assertEqual(b.horas_medidas, 1.0)
+
+
+class TestVersiones(unittest.TestCase):
+    def test_comparacion(self):
+        self.assertTrue(es_mas_nueva("1.10.0", "1.9.3"))
+        self.assertFalse(es_mas_nueva("v1.3.0", "1.3.0"))
 
 
 if __name__ == "__main__":

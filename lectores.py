@@ -213,6 +213,22 @@ def _ps_json(script: str):
     return datos if isinstance(datos, list) else [datos]
 
 
+def _estado_windows(baterias: list[Bateria]) -> None:
+    """Carga, consumo y enchufe en este momento (WMI BatteryStatus)."""
+    estado = _ps_json(r"Get-CimInstance -Namespace root\wmi -ClassName BatteryStatus "
+                      "| Select RemainingCapacity,ChargeRate,DischargeRate,PowerOnline,Charging")
+    if not baterias and estado:
+        baterias.append(Bateria())
+    for b, e in zip(baterias, estado):
+        if e.get("RemainingCapacity"):
+            b.carga_actual_mwh = e["RemainingCapacity"]
+        rate = e.get("DischargeRate") or e.get("ChargeRate")
+        if rate:
+            b.potencia_w = round(rate / 1000, 2)
+        b.enchufado = bool(e.get("PowerOnline"))
+        b.estado = "cargando" if e.get("Charging") else ("enchufado" if b.enchufado else "descargando")
+
+
 def leer_windows() -> list[Bateria]:
     baterias: list[Bateria] = []
     xml_informe = ""
@@ -244,16 +260,7 @@ def leer_windows() -> list[Bateria]:
                 b.ciclos = int(cic[i]["CycleCount"])
             baterias.append(b)
 
-    estado = _ps_json(r"Get-CimInstance -Namespace root\wmi -ClassName BatteryStatus "
-                      "| Select RemainingCapacity,ChargeRate,DischargeRate,PowerOnline,Charging")
-    for b, e in zip(baterias, estado):
-        if e.get("RemainingCapacity"):
-            b.carga_actual_mwh = e["RemainingCapacity"]
-        rate = e.get("DischargeRate") or e.get("ChargeRate")
-        if rate:
-            b.potencia_w = round(rate / 1000, 2)
-        b.enchufado = bool(e.get("PowerOnline"))
-        b.estado = "cargando" if e.get("Charging") else ("enchufado" if b.enchufado else "descargando")
+    _estado_windows(baterias)
     if baterias and xml_informe:
         try:
             b = baterias[0]
@@ -349,6 +356,22 @@ def leer_baterias() -> list[Bateria]:
         baterias = []
     _completar_con_psutil(baterias)
     return baterias
+
+
+def lectura_rapida() -> Bateria | None:
+    """Solo carga, enchufe y consumo actuales, sin el informe completo (para la bandeja)."""
+    so = platform.system()
+    baterias: list[Bateria] = []
+    if so == "Windows":
+        _estado_windows(baterias)
+    elif so == "Darwin":
+        d = parse_ioreg(ejecutar(["ioreg", "-rn", "AppleSmartBattery"]))
+        if d:
+            baterias.append(bateria_desde_ioreg(d))
+    elif so == "Linux":
+        baterias = leer_linux()
+    _completar_con_psutil(baterias)
+    return baterias[0] if baterias else None
 
 
 def _completar_con_psutil(baterias: list[Bateria]) -> None:

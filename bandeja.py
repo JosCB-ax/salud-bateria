@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 
 import configuracion
 from lectores import ejecutar
@@ -79,9 +80,31 @@ def main() -> None:
                              pystray.MenuItem("Salir", salir)))
     parar = threading.Event()
 
+    def apuntar_historial(ultimo_dia: list, vuelta: int) -> None:
+        """Salud una vez al día y consumo real cada 10 minutos si va con batería."""
+        import historial
+        from lectores import leer_baterias, lectura_rapida
+        try:
+            hoy = time.strftime("%Y-%m-%d")
+            if ultimo_dia[0] != hoy:
+                bats = leer_baterias()
+                if bats:
+                    historial.registrar(bats[0])
+                ultimo_dia[0] = hoy
+            elif vuelta % 10 == 0:
+                rapida = lectura_rapida()
+                if rapida and not rapida.enchufado:
+                    historial.registrar(rapida)
+        except Exception:  # noqa: BLE001 - el icono nunca debe caerse por esto
+            pass
+
     def vigilar():
         estado: dict = {}
+        ultimo_dia = [""]
+        vuelta = 0
         while not parar.is_set():
+            vuelta += 1
+            apuntar_historial(ultimo_dia, vuelta)
             b = psutil.sensors_battery()
             if b is not None:
                 icono.title = f"Salud de la batería · {b.percent:.0f} %" + (" · cargando" if b.power_plugged else "")
