@@ -31,7 +31,7 @@ from autonomia import calcular, horas_texto, sin_datos_texto  # noqa: E402
 from informe import COLORES, _filas, html_informe  # noqa: E402
 from salud_bateria import analizar  # noqa: E402
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 NOMBRES_NIVEL = {"excelente": "Excelente", "buena": "Buena", "desgastada": "Desgastada",
                  "mala": "Mala", "desconocida": "Sin datos"}
 

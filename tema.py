@@ -54,9 +54,11 @@ def aplicar(root, nombre: str) -> dict:
                    foreground=[("disabled", p["mut"])])
         estilo.configure("TNotebook", background=p["bg"], tabmargins=0)
         estilo.configure("TNotebook.Tab", background=p["bg"], padding=(10, 4))
-        estilo.map("TNotebook.Tab", background=[("selected", p["panel"])])
+        estilo.map("TNotebook.Tab", background=[("selected", p["panel"]), ("active", p["sel"])])
         estilo.configure("Treeview", background=p["panel"], fieldbackground=p["panel"], foreground=p["fg"])
         estilo.configure("Treeview.Heading", background=p["bg"], foreground=p["fg"])
+        estilo.map("Treeview.Heading", background=[("pressed", p["sel"]), ("active", p["sel"])],
+                   foreground=[("active", p["fg"])])
         estilo.map("Treeview", background=[("selected", p["sel"])], foreground=[("selected", p["fg"])])
         estilo.configure("TCheckbutton", background=p["bg"], foreground=p["fg"])
         estilo.map("TCheckbutton", background=[("active", p["bg"])])
