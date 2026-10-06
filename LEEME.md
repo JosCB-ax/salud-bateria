@@ -46,7 +46,7 @@ Para sacar una versión nueva, cambia el número en `instalador.iss`,
 
 En [Releases](https://github.com/JosCB-ax/salud-bateria/releases/latest) también están:
 
-- **macOS** (`SaludBateria-<versión>-macOS.dmg`, Macs con chip Apple): abre el .dmg y arrastra
+- **macOS** (`SaludBateria-<versión>-macOS-Apple.dmg` para Macs con chip Apple, `-macOS-Intel.dmg` para los Intel): abre el .dmg y arrastra
   SaludBateria a Aplicaciones. La primera vez macOS dirá que no puede verificar al desarrollador
   (el programa no está firmado): ve a Ajustes del Sistema › Privacidad y seguridad › «Abrir igualmente».
 - **Linux** (`SaludBateria-<versión>-Linux.tar.gz`): descomprímelo y ejecuta `./instalar-linux.sh`.
